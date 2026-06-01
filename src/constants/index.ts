@@ -16,7 +16,9 @@ export const HTTP_STATUS = {
 } as const;
 
 export const ROLES = {
-  TEACHER: 'teacher',
-  PARENT: 'parent',
+  TEACHER: 'docente',
+  PARENT: 'tutor',
   ADMIN: 'admin',
 } as const;
+
+export type Role = (typeof ROLES)[keyof typeof ROLES];

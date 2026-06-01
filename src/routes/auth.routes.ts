@@ -1,13 +1,12 @@
-import { Router, Request, Response } from 'express';
-import { HTTP_STATUS } from '../constants';
+import { Router } from 'express';
+import { loginHandler, getMeHandler } from '../controllers/auth.controller';
+import { authenticate } from '../middlewares/authenticate';
+import { validateRequest } from '../middlewares/validateRequest';
+import { loginSchema } from '../validations/auth.validation';
 
 const router = Router();
 
-router.use((_req: Request, res: Response) => {
-  res.status(HTTP_STATUS.NOT_IMPLEMENTED).json({
-    status: 'fail',
-    message: 'Auth endpoints not yet implemented',
-  });
-});
+router.post('/login', validateRequest({ body: loginSchema }), loginHandler);
+router.get('/me', authenticate, getMeHandler);
 
 export default router;

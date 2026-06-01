@@ -108,6 +108,7 @@ next(err);
 |---|---|---|
 | Validation error | 400 | `{ status: "fail", message: "...", errors: [...] }` |
 | Auth error | 401 | `{ status: "fail", message: "..." }` |
+| Forbidden | 403 | `{ status: "fail", message: "Forbidden" }` |
 | Not found | 404 | `{ status: "fail", message: "Route not found" }` |
 | Server error (dev) | 500 | `{ status: "error", message: "...", stack: "..." }` |
 | Server error (prod) | 500 | `{ status: "error", message: "Something went wrong" }` |
@@ -122,7 +123,9 @@ next(err);
 - **Input validation** with Zod prevents injection and malformed data.
 - **SQL injection** prevented by parameterized queries (`$1`, `$2`, etc.).
 - **No secrets in code.** All secrets go in `.env` (gitignored).
-- **Rate limiting** will be added in Phase 2.
+- **JWT authentication** via `authenticate` middleware.
+- **Role authorization** via `authorizeRoles` middleware.
+- **Passwords** hashed with bcryptjs.
 
 ---
 
@@ -141,7 +144,8 @@ bun run test            # Run all tests
 - Controllers: status codes, response body shape, error cases.
 - Middlewares: correct interception and response.
 - Services: business logic with mocked models.
-- Models: integration tests with a test database (future).
+- Models: tested through integration tests with mocked database layer.
+- Auth tests: mock `src/models/user.model.ts` with `jest.mock()` and test through Supertest.
 
 ---
 

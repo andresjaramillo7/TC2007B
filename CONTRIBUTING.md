@@ -152,12 +152,12 @@ bun run test            # Run all tests
 ## API Route Structure
 
 ```
-POST /api/auth/login         # Phase 2
-GET  /api/auth/me            # Phase 2
-GET  /api/mobile/children    # Phase 2
-GET  /api/mobile/grades      # Phase 2
-POST /api/teacher/grades     # Phase 2
-...                          # More Phase 2 endpoints
+POST /api/auth/login         
+GET  /api/auth/me            
+GET  /api/mobile/children    
+GET  /api/mobile/grades      
+POST /api/teacher/grades     
+...                          
 ```
 
 All endpoints use the `/api` prefix.

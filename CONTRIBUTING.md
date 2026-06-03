@@ -159,8 +159,8 @@ GET  /api/web/docente/asignaciones
 GET  /api/web/docente/grupos/:grupo_id/alumnos
 GET  /api/web/docente/avisos          
 POST /api/web/docente/avisos          
-GET  /api/mobile/children             
-GET  /api/mobile/grades               
+GET  /api/movil/tutor/hijos           
+GET  /api/movil/tutor/hijos/:alumno_id/calificaciones
 ...                                   
 ```
 

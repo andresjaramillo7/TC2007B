@@ -628,6 +628,137 @@ Run `psql -d grade_tracker -f database/schema.sql` to apply.
 
 All API request and response fields should use **snake_case**.
 
+## Mobile Tutor Endpoints (Parent/Tutor Mobile App)
+
+The mobile tutor module is split into two domains:
+- **children** — linked students for the authenticated tutor
+- **report-card** — consolidated report card (future: PDF generation, trimester signatures)
+
+All mobile tutor endpoints require `authenticate` and `authorizeRoles("tutor")`.
+
+- `docente` → `403 Forbidden`
+- `admin` → `403 Forbidden` (tutor mobile routes are tutor-only; no admin override)
+- Missing or invalid JWT → `401 Unauthorized`
+
+### Linked Children
+
+Returns all students linked to the authenticated tutor through `tutor_alumno`.
+
+```http
+GET /api/movil/tutor/hijos
+Authorization: Bearer <token>
+```
+
+**Success response (200):**
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "alumno_id": 5,
+      "nombre": "Mateo",
+      "apellido": "Jaramillo",
+      "nombre_completo": "Mateo Jaramillo",
+      "grupo": {
+        "grupo_id": 1,
+        "nombre": "1° A",
+        "grado": 1,
+        "grupo_letra": "A",
+        "ciclo_escolar": "2026-2027"
+      },
+      "foto_url": null,
+      "parentesco": "padre"
+    }
+  ]
+}
+```
+
+**Behavior:**
+- Sorted by `apellido, nombre`
+- Empty list returns `"data": []`
+
+### Consolidated Report Card
+
+Returns a full report card for one linked child, grouped by subject assignment.
+
+```http
+GET /api/movil/tutor/hijos/:alumno_id/calificaciones
+Authorization: Bearer <token>
+```
+
+**Path params:**
+
+| Param | Type | Description |
+|---|---|---|
+| `alumno_id` | integer | Positive student ID |
+
+**Authorization:** The authenticated tutor must be linked to the student. If the student does not exist or is not linked, returns `404 Student not found` (same generic message).
+
+**Success response (200):**
+```json
+{
+  "status": "success",
+  "data": {
+    "alumno": {
+      "alumno_id": 5,
+      "nombre": "Mateo",
+      "apellido": "Jaramillo",
+      "nombre_completo": "Mateo Jaramillo",
+      "grupo": {
+        "grupo_id": 1,
+        "nombre": "1° A",
+        "grado": 1,
+        "grupo_letra": "A",
+        "ciclo_escolar": "2026-2027"
+      },
+      "foto_url": null
+    },
+    "boleta": [
+      {
+        "asignacion_id": 12,
+        "materia": {
+          "materia_id": 1,
+          "nombre": "Matemáticas"
+        },
+        "docente": {
+          "docente_id": 1,
+          "nombre": "Ana",
+          "apellido": "López"
+        },
+        "calificaciones": [
+          {
+            "periodo": "primer trimestre",
+            "nota": 9.5,
+            "comentario": "Excelente progreso",
+            "fecha_registro": "2026-06-03T10:30:00.000Z"
+          },
+          {
+            "periodo": "segundo trimestre",
+            "nota": null,
+            "comentario": null,
+            "fecha_registro": null
+          },
+          {
+            "periodo": "tercer trimestre",
+            "nota": null,
+            "comentario": null,
+            "fecha_registro": null
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**Report card rules:**
+- Every subject assignment linked to the student's group is included
+- Results are grouped by `asignacion_id`
+- All three trimester slots are always present (`primer trimestre`, `segundo trimestre`, `tercer trimestre`)
+- Missing trimester grades return `nota: null`, `comentario: null`, `fecha_registro: null`
+- Subjects are sorted by subject name, then teacher name
+- Groups with no assignments return `boleta: []`
+
 ## Testing Locally
 
 ```bash
@@ -767,7 +898,8 @@ Content-Type: application/json
 | `POST /api/web/docente/chats/:chat_id/mensajes` | Send message | Implemented |
 | `GET /api/web/docente/avisos` | List announcements | Implemented |
 | `POST /api/web/docente/avisos` | Publish announcement | Implemented |
-| `/api/mobile` | Parent/tutor endpoints | 501 Not Implemented |
+| `GET /api/movil/tutor/hijos` | Linked children (tutor mobile) | Implemented |
+| `GET /api/movil/tutor/hijos/:alumno_id/calificaciones` | Consolidated report card (tutor mobile) | Implemented |
 
 Any other route returns 404.
 

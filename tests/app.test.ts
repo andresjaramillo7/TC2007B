@@ -74,10 +74,10 @@ describe('GET /api/auth/test', () => {
 });
 
 describe('GET /api/mobile/test', () => {
-  it('should return 501 not implemented', async () => {
+  it('should return 404 after migration to /api/movil/tutor', async () => {
     const res = await request(app).get('/api/mobile/test');
-    expect(res.status).toBe(501);
-    expect(res.body.message).toBe('Mobile endpoints not yet implemented');
+    expect(res.status).toBe(404);
+    expect(res.body.message).toBe('Route not found');
   });
 });
 

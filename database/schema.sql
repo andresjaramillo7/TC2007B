@@ -71,7 +71,10 @@ CREATE TABLE IF NOT EXISTS tutor_alumno (
 CREATE TABLE IF NOT EXISTS chats (
   id SERIAL PRIMARY KEY,
   alumno_id INTEGER NOT NULL REFERENCES alumnos(id) ON DELETE RESTRICT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  asignacion_docente_id INTEGER NOT NULL REFERENCES asignaciones_docentes(id) ON DELETE RESTRICT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uq_chats_alumno_asignacion
+    UNIQUE (alumno_id, asignacion_docente_id)
 );
 
 CREATE TABLE IF NOT EXISTS chat_participantes (

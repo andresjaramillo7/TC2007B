@@ -68,7 +68,7 @@ bun run test
 
 ### File Structure per Domain
 
-Each domain (auth, grades, chats, announcements, etc.) should follow this pattern when implemented:
+Each domain (auth, grades, chats, teacher-web messaging, mobile-messaging, announcements, etc.) should follow this pattern when implemented:
 
 ```
 src/
@@ -163,6 +163,11 @@ GET  /api/movil/tutor/hijos
 GET  /api/movil/tutor/hijos/:alumno_id/calificaciones
 POST /api/movil/tutor/hijos/:alumno_id/boletas/:periodo/firma
 GET  /api/movil/tutor/hijos/:alumno_id/calificaciones/pdf
+GET  /api/movil/tutor/avisos          
+GET  /api/movil/tutor/chats
+POST /api/movil/tutor/chats
+GET  /api/movil/tutor/chats/:chat_id/mensajes
+POST /api/movil/tutor/chats/:chat_id/mensajes
 ...                                   
 ```
 

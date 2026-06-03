@@ -197,11 +197,13 @@ The seed is safe to run multiple times — it uses `ON CONFLICT DO NOTHING`.
 After seeding users and academic data, run `bun run seed:messaging` to insert:
 
 - 2 tutor-student relationships (`tutor@example.com` linked to Mateo Jaramillo and Sofía Martínez)
-- 3 chats with participants:
-  - Chat 1: teacher1 + tutor about Mateo (with sample messages)
-  - Chat 2: teacher2 + tutor about Mateo (with sample messages)
-  - Chat 3: teacher1 + tutor about Sofía (empty)
+- 3 contextual chats (subject-specific by `alumno_id` + `asignacion_docente_id`):
+  - Chat 1: teacher1 (Ana López → Matemáticas → 1° A) + tutor about Mateo (with sample messages)
+  - Chat 2: teacher2 (Pedro Ruiz → Historia → 1° A) + tutor about Mateo (with sample messages)
+  - Chat 3: teacher1 (Ana López → Matemáticas → 1° A) + tutor about Sofía (empty chat)
 - Sample messages in chats 1 and 2 with mixed read/unread status
+
+Chats are now created or matched by `alumno_id` + `asignacion_docente_id`, ensuring one conversation per student + subject assignment.
 
 The seed is safe to run multiple times — existing chats and participants are not duplicated.
 
@@ -617,7 +619,7 @@ The PostgreSQL schema includes:
 - `alumnos` — students enrolled in groups
 - `calificaciones` — grades linked to students, assignments, and trimesters
 - `tutor_alumno` — links tutors to students with a relationship type
-- `chats` — conversations tied to a student (`alumno_id`)
+- `chats` — conversations tied to a student and specific subject assignment (`alumno_id` + `asignacion_docente_id`, unique together)
 - `chat_participantes` — maps users to chats
 - `mensajes` — individual messages within chats
 - `avisos_grupales` — group announcements published by teachers and admins
@@ -631,10 +633,11 @@ All API request and response fields should use **snake_case**.
 
 ## Mobile Tutor Endpoints (Parent/Tutor Mobile App)
 
-The mobile tutor module is split into three domains:
+The mobile tutor module is split into four domains:
 - **children** — linked students for the authenticated tutor
 - **report-card** — consolidated report card (includes trimester signatures, PDF download)
 - **mobile-announcements** — tutor announcement feed (announcements for linked children's groups)
+- **mobile-messaging** — subject-specific chat with teachers
 
 All mobile tutor endpoints require `authenticate` and `authorizeRoles("tutor")`.
 
@@ -961,6 +964,218 @@ Authorization: Bearer <token>
 | `docente` or `admin` | 403 Forbidden |
 | Missing/invalid JWT | 401 Unauthorized |
 
+### Mobile Tutor Messaging
+
+Subject-specific chat conversations between tutors and teachers.
+
+Each chat represents a **student + subject assignment** (`alumno_id` + `asignacion_docente_id`), which identifies the student, subject, teacher, and group. This ensures the mobile app displays the exact subject being discussed, even when a teacher teaches multiple subjects to the same group.
+
+All mobile messaging endpoints require `authenticate` and `authorizeRoles("tutor")`.
+
+- `docente` → `403 Forbidden`
+- `admin` → `403 Forbidden`
+- Missing or invalid JWT → `401 Unauthorized`
+
+#### Tutor Chat Inbox
+
+Returns the authenticated tutor's chat conversations with subject context.
+
+```http
+GET /api/movil/tutor/chats
+Authorization: Bearer <token>
+```
+
+**Behavior:**
+
+- Returns only chats where the tutor participates
+- Sorted by most recent activity first; empty chats appear last
+- Unread count considers only messages where `leido = false` and `remitente_id` is not the authenticated tutor
+
+**Success response (200):**
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "chat_id": 1,
+      "asignacion_id": 12,
+      "alumno": {
+        "alumno_id": 5,
+        "nombre": "Mateo",
+        "apellido": "Jaramillo"
+      },
+      "docente": {
+        "docente_id": 1,
+        "nombre": "Ana",
+        "apellido": "López"
+      },
+      "materia": {
+        "materia_id": 3,
+        "nombre": "Matemáticas"
+      },
+      "ultimo_mensaje": "Buenas tardes, quisiera hacer una consulta.",
+      "ultima_fecha": "2026-06-03T15:00:00.000Z",
+      "no_leidos": 1
+    }
+  ]
+}
+```
+
+Empty inbox:
+```json
+{
+  "status": "success",
+  "data": []
+}
+```
+
+#### Start or Reuse Subject-Specific Chat
+
+Starts a new conversation from one of the tutor's linked children's subject assignments, or reuses an existing one.
+
+```http
+POST /api/movil/tutor/chats
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "alumno_id": 5,
+  "asignacion_id": 12,
+  "contenido": "Buenas tardes, quisiera hacer una consulta sobre la materia."
+}
+```
+
+**Validation:**
+
+| Field | Rule |
+|---|---|
+| `alumno_id` | Positive integer |
+| `asignacion_id` | Positive integer (maps to `asignaciones_docentes.id`) |
+| `contenido` | Trimmed string, 1–2000 visible characters |
+
+**Business validation:**
+- `alumno_id` must be linked to the authenticated tutor through `tutor_alumno`
+- `asignacion_id` must exist and belong to the student's group
+- The assignment identifies the target teacher
+
+**Behavior:**
+- **New chat:** creates chat, adds tutor + teacher participants, inserts initial message
+- **Existing chat:** reuses chat, ensures participants exist, inserts new message
+- Runs in a single PostgreSQL transaction
+- Always returns `201 Created` because a new message is always created
+
+**Success response (201 Created):**
+```json
+{
+  "status": "success",
+  "data": {
+    "chat_id": 4,
+    "mensaje_id": 120,
+    "chat_creado": true
+  }
+}
+```
+
+`chat_creado: true` for a newly created chat; `chat_creado: false` when an existing chat is reused.
+
+**Errors:**
+
+| Condition | Status |
+|---|---|
+| Unlinked or nonexistent student | 404 `Student not found` |
+| Invalid or mismatched assignment | 404 `Assignment not found` |
+| Empty or whitespace-only `contenido` | 400 Validation failed |
+| `contenido` over 2000 characters | 400 Validation failed |
+| Invalid `alumno_id` or `asignacion_id` | 400 Validation failed |
+
+#### Read Paginated Chat Messages
+
+Opens a chat and retrieves messages in reverse chronological order. Incoming unread messages are automatically marked as read.
+
+```http
+GET /api/movil/tutor/chats/:chat_id/mensajes?page=1&limit=20
+Authorization: Bearer <token>
+```
+
+**Path params:**
+
+| Param | Type | Description |
+|---|---|---|
+| `chat_id` | integer | Positive chat ID |
+
+**Query params:**
+
+| Param | Type | Default | Max | Description |
+|---|---|---|---|---|
+| `page` | integer | 1 | — | Page number (positive integer) |
+| `limit` | integer | 20 | 100 | Messages per page |
+
+**Behavior:**
+- Tutor must be a participant; otherwise `404 Chat not found` (same generic error for unauthorized and nonexistent chats)
+- After authorization, marks incoming messages as read (`leido = true` where `remitente_id != tutor_id`)
+- Does not modify the tutor's own messages
+- Sorted by `fecha_envio DESC, id DESC`
+
+**Success response (200):**
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "mensaje_id": 101,
+      "remitente_id": 3,
+      "contenido": "Buenas tardes",
+      "leido": true,
+      "fecha_envio": "2026-06-03T15:00:00.000Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 1,
+    "total_pages": 1
+  }
+}
+```
+
+#### Send Message
+
+Sends a new message in an existing authorized chat.
+
+```http
+POST /api/movil/tutor/chats/:chat_id/mensajes
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "contenido": "Enterado, gracias."
+}
+```
+
+**Validation:**
+
+| Field | Rule |
+|---|---|
+| `contenido` | Trimmed string, 1–2000 visible characters |
+
+**Behavior:**
+- Tutor must be a participant; otherwise `404 Chat not found`
+- New messages are inserted with `leido = false` and `remitente_id` set to the authenticated tutor
+
+**Success response (201 Created):**
+```json
+{
+  "status": "success",
+  "data": {
+    "mensaje_id": 103,
+    "remitente_id": 3,
+    "contenido": "Enterado, gracias.",
+    "leido": false,
+    "fecha_envio": "2026-06-03T15:05:00.000Z"
+  }
+}
+```
+
 ## Testing Locally
 
 ```bash
@@ -1105,6 +1320,10 @@ Content-Type: application/json
 | `POST /api/movil/tutor/hijos/:alumno_id/boletas/:periodo/firma` | Sign trimester report card (tutor mobile) | Implemented |
 | `GET /api/movil/tutor/hijos/:alumno_id/calificaciones/pdf` | Download report card PDF (tutor mobile) | Implemented |
 | `GET /api/movil/tutor/avisos` | Tutor announcement feed (tutor mobile) | Implemented |
+| `GET /api/movil/tutor/chats` | Tutor chat inbox (tutor mobile) | Implemented |
+| `POST /api/movil/tutor/chats` | Start or reuse subject-specific chat (tutor mobile) | Implemented |
+| `GET /api/movil/tutor/chats/:chat_id/mensajes` | Paginated chat messages (tutor mobile) | Implemented |
+| `POST /api/movil/tutor/chats/:chat_id/mensajes` | Send message (tutor mobile) | Implemented |
 
 Any other route returns 404.
 

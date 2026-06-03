@@ -9,6 +9,14 @@ interface StudentRow {
   id: number;
   nombre: string;
   apellido: string;
+  grupo_id: number;
+}
+
+interface AssignmentRow {
+  id: number;
+  docente_id: number;
+  materia_nombre: string;
+  grupo_id: number;
 }
 
 interface ChatRow {
@@ -48,78 +56,110 @@ async function seedMessaging(): Promise<void> {
 
     // Fetch required students
     const studentsResult = await client.query<StudentRow>(
-      `SELECT id, nombre, apellido FROM alumnos
+      `SELECT id, nombre, apellido, grupo_id FROM alumnos
        WHERE (nombre, apellido) IN (('Mateo', 'Jaramillo'), ('Sofía', 'Martínez'))`,
     );
 
-    const studentMap = new Map<string, number>();
+    const studentMap = new Map<string, StudentRow>();
     for (const row of studentsResult.rows) {
-      studentMap.set(`${row.nombre} ${row.apellido}`, row.id);
+      studentMap.set(`${row.nombre} ${row.apellido}`, row);
     }
 
-    const mateoId = studentMap.get('Mateo Jaramillo');
-    const sofiaId = studentMap.get('Sofía Martínez');
+    const mateo = studentMap.get('Mateo Jaramillo');
+    const sofia = studentMap.get('Sofía Martínez');
 
-    if (!mateoId || !sofiaId) {
+    if (!mateo || !sofia) {
       console.error('ERROR: Required students not found.');
       console.error('Run `bun run seed:academic` before `bun run seed:messaging`.');
       await client.query('ROLLBACK');
       return;
     }
 
+    // Fetch required assignments
+    const assignmentsResult = await client.query<AssignmentRow>(
+      `SELECT ad.id, ad.docente_id, ad.grupo_id, m.nombre_materia
+       FROM asignaciones_docentes ad
+       JOIN materias m ON m.id = ad.materia_id
+       WHERE (ad.docente_id, ad.grupo_id, m.nombre_materia) IN (
+         ($1, $2, 'Matemáticas'),
+         ($3, $2, 'Historia')
+       )`,
+      [teacher1Id, mateo.grupo_id, teacher2Id],
+    );
+
+    if (assignmentsResult.rows.length < 2) {
+      console.error('ERROR: Required assignments not found.');
+      console.error('Run `bun run seed:academic` before `bun run seed:messaging`.');
+      await client.query('ROLLBACK');
+      return;
+    }
+
+    const matematicasAssignment = assignmentsResult.rows.find(
+      (r) => r.docente_id === teacher1Id && r.materia_nombre === 'Matemáticas',
+    )!;
+    const historiaAssignment = assignmentsResult.rows.find(
+      (r) => r.docente_id === teacher2Id && r.materia_nombre === 'Historia',
+    )!;
+
     // Create tutor-alumno relationships
     await client.query(
       `INSERT INTO tutor_alumno (tutor_id, alumno_id, parentesco)
        VALUES ($1, $2, $3)
        ON CONFLICT (tutor_id, alumno_id) DO NOTHING`,
-      [tutorId, mateoId, 'padre'],
+      [tutorId, mateo.id, 'padre'],
     );
     await client.query(
       `INSERT INTO tutor_alumno (tutor_id, alumno_id, parentesco)
        VALUES ($1, $2, $3)
        ON CONFLICT (tutor_id, alumno_id) DO NOTHING`,
-      [tutorId, sofiaId, 'padre'],
+      [tutorId, sofia.id, 'padre'],
     );
 
-    // Helper to find existing chat
-    async function findExistingChat(
-      alumno_id: number,
-      teacher_id: number,
-      tutor_id: number,
-    ): Promise<number | null> {
-      const result = await client.query(
-        `SELECT c.id
-         FROM chats c
-         JOIN chat_participantes cp1 ON cp1.chat_id = c.id AND cp1.usuario_id = $2
-         JOIN chat_participantes cp2 ON cp2.chat_id = c.id AND cp2.usuario_id = $3
-         WHERE c.alumno_id = $1
-         LIMIT 1`,
-        [alumno_id, teacher_id, tutor_id],
+    // Helper to create or reuse a contextual chat
+    async function findOrCreateChat(
+      alumnoId: number,
+      asignacionDocenteId: number,
+    ): Promise<number> {
+      const insertResult = await client.query<ChatRow>(
+        `INSERT INTO chats (alumno_id, asignacion_docente_id)
+         VALUES ($1, $2)
+         ON CONFLICT (alumno_id, asignacion_docente_id) DO NOTHING
+         RETURNING id`,
+        [alumnoId, asignacionDocenteId],
       );
-      return result.rows.length > 0 ? (result.rows[0] as ChatRow).id : null;
+
+      if (insertResult.rows.length > 0) {
+        return insertResult.rows[0].id;
+      }
+
+      const existing = await client.query<ChatRow>(
+        'SELECT id FROM chats WHERE alumno_id = $1 AND asignacion_docente_id = $2',
+        [alumnoId, asignacionDocenteId],
+      );
+      return existing.rows[0].id;
     }
 
-    // Chat 1: teacher1 + tutor about Mateo
-    let chat1Id = await findExistingChat(mateoId, teacher1Id, tutorId);
-    if (!chat1Id) {
-      const chatResult = await client.query<ChatRow>(
-        `INSERT INTO chats (alumno_id) VALUES ($1) RETURNING id`,
-        [mateoId],
-      );
-      chat1Id = chatResult.rows[0].id;
+    // Chat 1: teacher1 (Ana López → Matemáticas → 1° A) + tutor about Mateo
+    const chat1Id = await findOrCreateChat(mateo.id, matematicasAssignment.id);
 
-      await client.query(
-        `INSERT INTO chat_participantes (chat_id, usuario_id) VALUES ($1, $2)
-         ON CONFLICT (chat_id, usuario_id) DO NOTHING`,
-        [chat1Id, teacher1Id],
-      );
-      await client.query(
-        `INSERT INTO chat_participantes (chat_id, usuario_id) VALUES ($1, $2)
-         ON CONFLICT (chat_id, usuario_id) DO NOTHING`,
-        [chat1Id, tutorId],
-      );
+    await client.query(
+      `INSERT INTO chat_participantes (chat_id, usuario_id) VALUES ($1, $2)
+       ON CONFLICT (chat_id, usuario_id) DO NOTHING`,
+      [chat1Id, teacher1Id],
+    );
+    await client.query(
+      `INSERT INTO chat_participantes (chat_id, usuario_id) VALUES ($1, $2)
+       ON CONFLICT (chat_id, usuario_id) DO NOTHING`,
+      [chat1Id, tutorId],
+    );
 
-      // Seed messages for chat 1
+    // Insert messages only if chat is new (no messages yet)
+    const existingMsgCount = await client.query(
+      'SELECT COUNT(*)::int AS count FROM mensajes WHERE chat_id = $1',
+      [chat1Id],
+    );
+
+    if (existingMsgCount.rows[0].count === 0) {
       const messages = [
         { remitente_id: tutorId, contenido: 'Hola Miss, quería preguntarle cómo va Mateo en clase' },
         { remitente_id: teacher1Id, contenido: 'Hola Carlos, Mateo va muy bien, está participando mucho' },
@@ -157,32 +197,30 @@ async function seedMessaging(): Promise<void> {
          )`,
         [chat1Id, tutorId],
       );
-
-      console.log(`  ✓ Chat 1 (${chat1Id}): teacher1 + tutor about Mateo`);
-    } else {
-      console.log(`  ✓ Chat 1 (${chat1Id}): already exists, skipped`);
     }
 
-    // Chat 2: teacher2 + tutor about Mateo
-    let chat2Id = await findExistingChat(mateoId, teacher2Id, tutorId);
-    if (!chat2Id) {
-      const chatResult = await client.query<ChatRow>(
-        `INSERT INTO chats (alumno_id) VALUES ($1) RETURNING id`,
-        [mateoId],
-      );
-      chat2Id = chatResult.rows[0].id;
+    console.log(`  ✓ Chat 1 (${chat1Id}): teacher1 + tutor about Mateo (Matemáticas)`);
 
-      await client.query(
-        `INSERT INTO chat_participantes (chat_id, usuario_id) VALUES ($1, $2)
-         ON CONFLICT (chat_id, usuario_id) DO NOTHING`,
-        [chat2Id, teacher2Id],
-      );
-      await client.query(
-        `INSERT INTO chat_participantes (chat_id, usuario_id) VALUES ($1, $2)
-         ON CONFLICT (chat_id, usuario_id) DO NOTHING`,
-        [chat2Id, tutorId],
-      );
+    // Chat 2: teacher2 (Pedro Ruiz → Historia → 1° A) + tutor about Mateo
+    const chat2Id = await findOrCreateChat(mateo.id, historiaAssignment.id);
 
+    await client.query(
+      `INSERT INTO chat_participantes (chat_id, usuario_id) VALUES ($1, $2)
+       ON CONFLICT (chat_id, usuario_id) DO NOTHING`,
+      [chat2Id, teacher2Id],
+    );
+    await client.query(
+      `INSERT INTO chat_participantes (chat_id, usuario_id) VALUES ($1, $2)
+       ON CONFLICT (chat_id, usuario_id) DO NOTHING`,
+      [chat2Id, tutorId],
+    );
+
+    const existingMsgCount2 = await client.query(
+      'SELECT COUNT(*)::int AS count FROM mensajes WHERE chat_id = $1',
+      [chat2Id],
+    );
+
+    if (existingMsgCount2.rows[0].count === 0) {
       const messages = [
         { remitente_id: teacher2Id, contenido: 'Hola Carlos, soy el profesor Pedro Ruiz, comento a Mateo en Historia' },
         { remitente_id: tutorId, contenido: 'Gracias profe, ¿cómo va en su clase?' },
@@ -196,36 +234,25 @@ async function seedMessaging(): Promise<void> {
           [chat2Id, msg.remitente_id, msg.contenido],
         );
       }
-
-      console.log(`  ✓ Chat 2 (${chat2Id}): teacher2 + tutor about Mateo`);
-    } else {
-      console.log(`  ✓ Chat 2 (${chat2Id}): already exists, skipped`);
     }
 
-    // Chat 3: teacher1 + tutor about Sofía (empty chat)
-    let chat3Id = await findExistingChat(sofiaId, teacher1Id, tutorId);
-    if (!chat3Id) {
-      const chatResult = await client.query<ChatRow>(
-        `INSERT INTO chats (alumno_id) VALUES ($1) RETURNING id`,
-        [sofiaId],
-      );
-      chat3Id = chatResult.rows[0].id;
+    console.log(`  ✓ Chat 2 (${chat2Id}): teacher2 + tutor about Mateo (Historia)`);
 
-      await client.query(
-        `INSERT INTO chat_participantes (chat_id, usuario_id) VALUES ($1, $2)
-         ON CONFLICT (chat_id, usuario_id) DO NOTHING`,
-        [chat3Id, teacher1Id],
-      );
-      await client.query(
-        `INSERT INTO chat_participantes (chat_id, usuario_id) VALUES ($1, $2)
-         ON CONFLICT (chat_id, usuario_id) DO NOTHING`,
-        [chat3Id, tutorId],
-      );
+    // Chat 3: teacher1 (Ana López → Matemáticas → 1° A) + tutor about Sofía (empty)
+    const chat3Id = await findOrCreateChat(sofia.id, matematicasAssignment.id);
 
-      console.log(`  ✓ Chat 3 (${chat3Id}): teacher1 + tutor about Sofía (empty)`);
-    } else {
-      console.log(`  ✓ Chat 3 (${chat3Id}): already exists, skipped`);
-    }
+    await client.query(
+      `INSERT INTO chat_participantes (chat_id, usuario_id) VALUES ($1, $2)
+       ON CONFLICT (chat_id, usuario_id) DO NOTHING`,
+      [chat3Id, teacher1Id],
+    );
+    await client.query(
+      `INSERT INTO chat_participantes (chat_id, usuario_id) VALUES ($1, $2)
+       ON CONFLICT (chat_id, usuario_id) DO NOTHING`,
+      [chat3Id, tutorId],
+    );
+
+    console.log(`  ✓ Chat 3 (${chat3Id}): teacher1 + tutor about Sofía (Matemáticas, empty)`);
 
     await client.query('COMMIT');
     console.log('Messaging data seeded successfully.');

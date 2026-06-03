@@ -6,6 +6,12 @@ import {
   signReportCardHandler,
   downloadReportCardPdfHandler,
 } from '../controllers/report-card.controller';
+import {
+  getMobileChatsHandler,
+  startMobileChatHandler,
+  getMobileChatMessagesHandler,
+  sendMobileChatMessageHandler,
+} from '../controllers/mobile-messaging.controller';
 import { authenticate } from '../middlewares/authenticate';
 import { authorizeRoles } from '../middlewares/authorizeRoles';
 import { validateRequest } from '../middlewares/validateRequest';
@@ -14,6 +20,12 @@ import {
   signReportCardParamsSchema,
   signReportCardBodySchema,
 } from '../validations/report-card.validation';
+import {
+  chatIdParamsSchema,
+  messagesQuerySchema,
+  sendMessageBodySchema,
+  startChatBodySchema,
+} from '../validations/mobile-messaging.validation';
 
 const router = Router();
 
@@ -53,6 +65,37 @@ router.get(
   authenticate,
   authorizeRoles('tutor'),
   getMobileAnnouncementsHandler,
+);
+
+router.get(
+  '/chats',
+  authenticate,
+  authorizeRoles('tutor'),
+  getMobileChatsHandler,
+);
+
+router.post(
+  '/chats',
+  authenticate,
+  authorizeRoles('tutor'),
+  validateRequest({ body: startChatBodySchema }),
+  startMobileChatHandler,
+);
+
+router.get(
+  '/chats/:chat_id/mensajes',
+  authenticate,
+  authorizeRoles('tutor'),
+  validateRequest({ params: chatIdParamsSchema, query: messagesQuerySchema }),
+  getMobileChatMessagesHandler,
+);
+
+router.post(
+  '/chats/:chat_id/mensajes',
+  authenticate,
+  authorizeRoles('tutor'),
+  validateRequest({ params: chatIdParamsSchema, body: sendMessageBodySchema }),
+  sendMobileChatMessageHandler,
 );
 
 export default router;

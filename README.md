@@ -631,9 +631,10 @@ All API request and response fields should use **snake_case**.
 
 ## Mobile Tutor Endpoints (Parent/Tutor Mobile App)
 
-The mobile tutor module is split into two domains:
+The mobile tutor module is split into three domains:
 - **children** — linked students for the authenticated tutor
 - **report-card** — consolidated report card (includes trimester signatures, PDF download)
+- **mobile-announcements** — tutor announcement feed (announcements for linked children's groups)
 
 All mobile tutor endpoints require `authenticate` and `authorizeRoles("tutor")`.
 
@@ -901,6 +902,65 @@ Content-Disposition: attachment; filename="boleta-mateo-jaramillo.pdf"
 | `docente` or `admin` | 403 Forbidden |
 | Missing/invalid JWT | 401 Unauthorized |
 
+### Tutor Announcement Feed
+
+Returns announcements for groups linked to the authenticated tutor's children.
+
+```http
+GET /api/movil/tutor/avisos
+Authorization: Bearer <token>
+```
+
+**Behavior:**
+
+- Returns announcements for all groups associated with the tutor's linked children
+- Announcements are never duplicated, even if multiple children belong to the same group
+- Newest-first sorting by `fecha_publicacion DESC, id DESC`
+- No push notifications yet
+
+**Success response (200):**
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "aviso_id": 3,
+      "grupo": {
+        "grupo_id": 1,
+        "nombre": "1° A"
+      },
+      "autor": {
+        "usuario_id": 1,
+        "nombre": "Ana",
+        "apellido": "López",
+        "rol": "docente"
+      },
+      "titulo": "Firma de boletas",
+      "contenido": "Favor de revisar y firmar la boleta del trimestre.",
+      "fecha_publicacion": "2026-06-03T15:00:00.000Z"
+    }
+  ]
+}
+```
+
+**Empty response (200):**
+
+```json
+{
+  "status": "success",
+  "data": []
+}
+```
+
+**Errors:**
+
+| Condition | Status |
+|---|---|
+| No linked children or no announcements | 200 with `data: []` |
+| `docente` or `admin` | 403 Forbidden |
+| Missing/invalid JWT | 401 Unauthorized |
+
 ## Testing Locally
 
 ```bash
@@ -1044,6 +1104,7 @@ Content-Type: application/json
 | `GET /api/movil/tutor/hijos/:alumno_id/calificaciones` | Consolidated report card (tutor mobile) | Implemented |
 | `POST /api/movil/tutor/hijos/:alumno_id/boletas/:periodo/firma` | Sign trimester report card (tutor mobile) | Implemented |
 | `GET /api/movil/tutor/hijos/:alumno_id/calificaciones/pdf` | Download report card PDF (tutor mobile) | Implemented |
+| `GET /api/movil/tutor/avisos` | Tutor announcement feed (tutor mobile) | Implemented |
 
 Any other route returns 404.
 

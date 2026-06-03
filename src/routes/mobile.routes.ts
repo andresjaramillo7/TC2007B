@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getChildrenHandler } from '../controllers/children.controller';
+import { getMobileAnnouncementsHandler } from '../controllers/mobile-announcements.controller';
 import {
   getChildReportCardHandler,
   signReportCardHandler,
@@ -45,6 +46,13 @@ router.get(
   authorizeRoles('tutor'),
   validateRequest({ params: studentIdParamsSchema }),
   downloadReportCardPdfHandler,
+);
+
+router.get(
+  '/avisos',
+  authenticate,
+  authorizeRoles('tutor'),
+  getMobileAnnouncementsHandler,
 );
 
 export default router;

@@ -38,3 +38,24 @@ CREATE TABLE IF NOT EXISTS alumnos (
   foto_url VARCHAR(500),
   UNIQUE (nombre, apellido, grupo_id)
 );
+
+CREATE TABLE IF NOT EXISTS calificaciones (
+  id SERIAL PRIMARY KEY,
+  alumno_id INTEGER NOT NULL REFERENCES alumnos(id) ON DELETE RESTRICT,
+  asignacion_docente_id INTEGER NOT NULL REFERENCES asignaciones_docentes(id) ON DELETE RESTRICT,
+  periodo VARCHAR(30) NOT NULL CHECK (
+    periodo IN (
+      'primer trimestre',
+      'segundo trimestre',
+      'tercer trimestre'
+    )
+  ),
+  calificacion NUMERIC(4, 2) NOT NULL CHECK (
+    calificacion >= 0 AND calificacion <= 10
+  ),
+  comentario TEXT CHECK (
+    comentario IS NULL OR CHAR_LENGTH(comentario) <= 500
+  ),
+  fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (alumno_id, asignacion_docente_id, periodo)
+);

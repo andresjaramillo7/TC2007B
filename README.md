@@ -43,7 +43,10 @@ bun run seed
 # 6. Seed academic data (groups, subjects, assignments, students)
 bun run seed:academic
 
-# 7. Start development server
+# 7. Seed grades (trimester grades for students)
+bun run seed:grades
+
+# 8. Start development server
 bun run dev
 ```
 
@@ -59,6 +62,7 @@ The server starts at `http://localhost:3000`.
 | `bun run start` | Run compiled app from `dist/` |
 | `bun run seed` | Insert test users into the database |
 | `bun run seed:academic` | Insert academic data (groups, subjects, assignments, students) |
+| `bun run seed:grades` | Insert sample grades for testing |
 | `bun run test` | Run tests |
 | `bun run lint` | Run ESLint |
 | `bun run format` | Format code with Prettier |
@@ -171,6 +175,181 @@ After seeding users, run `bun run seed:academic` to insert:
 
 The seed is safe to run multiple times — it uses `ON CONFLICT` on all inserts.
 
+## Seed Grades
+
+After seeding academic data, run `bun run seed:grades` to insert:
+
+- 4 grade records for 2 teachers, 2 students, across 2 assignments
+- Sample data covering grade history and assignment table scenarios
+
+The seed is safe to run multiple times — it uses `ON CONFLICT DO NOTHING`.
+
+## Grade Rules
+
+| Rule | Detail |
+|---|---|
+| Range | 0.00 to 10.00, decimals allowed (e.g. 8.5, 9.75) |
+| Periods | `primer trimestre`, `segundo trimestre`, `tercer trimestre` (exact lowercase) |
+| Comments | Optional, nullable, max 500 characters |
+| Upsert behavior | `INSERT` if no grade exists, `UPDATE` if it does (same student + assignment + period) |
+| Bulk transaction | All upserts run in a single PostgreSQL transaction; any failure rolls back the entire batch |
+
+## Grade Endpoints (Teacher Web Platform)
+
+All grade endpoints require `authenticate` and `authorizeRoles("docente", "admin")`.
+
+### Student Grade History
+
+Returns grades visible to the authenticated user for a specific student.
+
+```http
+GET /api/web/docente/alumnos/:alumno_id/calificaciones
+Authorization: Bearer <token>
+```
+
+**Behavior:**
+
+- `docente` — returns only grades linked to the teacher's own assignments
+- `admin` — returns all grades for the student
+- `tutor` — `403 Forbidden`
+
+**Success response (200):**
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "calificacion_id": 88,
+      "asignacion_id": 12,
+      "materia": "Matemáticas",
+      "periodo": "primer trimestre",
+      "nota": 9.5,
+      "comentario": "Excelente",
+      "fecha_registro": "2026-06-03T10:30:00.000Z"
+    }
+  ]
+}
+```
+
+### Assignment Grade Table by Trimester
+
+Returns all students in the assignment group, including those without a recorded grade.
+
+```http
+GET /api/web/docente/asignaciones/:asignacion_id/calificaciones?periodo=primer%20trimestre
+Authorization: Bearer <token>
+```
+
+**Required query:** `periodo` — one of `primer trimestre`, `segundo trimestre`, `tercer trimestre`
+
+**Success response (200):**
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "alumno": {
+        "alumno_id": 5,
+        "nombre": "Mateo",
+        "apellido": "Jaramillo",
+        "foto_url": null
+      },
+      "calificacion": {
+        "calificacion_id": 88,
+        "nota": 9.5,
+        "comentario": "Excelente",
+        "fecha_registro": "2026-06-03T10:30:00.000Z"
+      }
+    },
+    {
+      "alumno": {
+        "alumno_id": 6,
+        "nombre": "Sofía",
+        "apellido": "López",
+        "foto_url": null
+      },
+      "calificacion": null
+    }
+  ]
+}
+```
+
+### Individual Grade Upsert
+
+Create or update a grade for one student.
+
+```http
+POST /api/web/docente/calificaciones
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "alumno_id": 5,
+  "asignacion_id": 12,
+  "periodo": "primer trimestre",
+  "nota": 8.5,
+  "comentario": "Buen trabajo"
+}
+```
+
+`comentario` may be `null` or omitted.
+
+**Success response (200):**
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Calificación registrada con éxito",
+    "calificacion_id": 45
+  }
+}
+```
+
+### Bulk Grade Upsert
+
+Create or update grades for multiple students in the same assignment and trimester.
+
+```http
+POST /api/web/docente/calificaciones/bulk
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "asignacion_id": 12,
+  "periodo": "primer trimestre",
+  "calificaciones": [
+    {
+      "alumno_id": 5,
+      "nota": 8.5,
+      "comentario": "Buen trabajo"
+    },
+    {
+      "alumno_id": 6,
+      "nota": 9.2,
+      "comentario": null
+    }
+  ]
+}
+```
+
+**Rules:**
+
+- 1 to 100 records per request
+- No duplicate `alumno_id` values allowed
+- All students must belong to the assignment group
+- Entire operation runs in a PostgreSQL transaction
+
+**Success response (200):**
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Calificaciones registradas con éxito",
+    "actualizadas": 2
+  }
+}
+```
+
 ## Academic Endpoints (Teacher Web Platform)
 
 ### Teacher Assignments
@@ -251,6 +430,7 @@ The PostgreSQL schema includes:
 - `materias` — subjects
 - `asignaciones_docentes` — teacher assignments linking teachers to groups and subjects
 - `alumnos` — students enrolled in groups
+- `calificaciones` — grades linked to students, assignments, and trimesters
 
 Run `psql -d grade_tracker -f database/schema.sql` to apply.
 
@@ -286,6 +466,10 @@ curl http://localhost:3000/api/web/docente/asignaciones \
 | `/api/auth/me` | Current authenticated user | Implemented |
 | `/api/web/docente/asignaciones` | Teacher assignments | Implemented |
 | `/api/web/docente/grupos/:grupo_id/alumnos` | Students by group | Implemented |
+| `/api/web/docente/alumnos/:alumno_id/calificaciones` | Student grade history | Implemented |
+| `/api/web/docente/asignaciones/:asignacion_id/calificaciones` | Assignment grade table by trimester | Implemented |
+| `POST /api/web/docente/calificaciones` | Individual grade upsert | Implemented |
+| `POST /api/web/docente/calificaciones/bulk` | Bulk grade upsert | Implemented |
 | `/api/mobile` | Parent/tutor endpoints | 501 Not Implemented |
 
 Any other route returns 404.

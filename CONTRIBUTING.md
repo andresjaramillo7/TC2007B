@@ -68,7 +68,7 @@ bun run test
 
 ### File Structure per Domain
 
-Each domain (auth, grades, chats, etc.) should follow this pattern when implemented:
+Each domain (auth, grades, chats, announcements, etc.) should follow this pattern when implemented:
 
 ```
 src/
@@ -134,6 +134,7 @@ next(err);
 - **Framework:** Jest + Supertest
 - **Test files:** `tests/*.test.ts`
 - **Convention:** One `describe` block per endpoint, one `it` per scenario.
+- **Mocking pattern:** Mock model functions with `jest.mock()` at the top of the test file. Mock the database connection pool if the service imports it directly.
 
 ```bash
 bun run test            # Run all tests
@@ -156,6 +157,8 @@ POST /api/auth/login
 GET  /api/auth/me                     
 GET  /api/web/docente/asignaciones    
 GET  /api/web/docente/grupos/:grupo_id/alumnos
+GET  /api/web/docente/avisos          
+POST /api/web/docente/avisos          
 GET  /api/mobile/children             
 GET  /api/mobile/grades               
 ...                                   

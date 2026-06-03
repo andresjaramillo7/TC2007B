@@ -9,6 +9,17 @@ interface SuccessBody {
   pages?: number;
 }
 
+interface PaginationSuccessBody {
+  status: 'success';
+  data: unknown;
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    total_pages: number;
+  };
+}
+
 interface ErrorBody {
   status: 'fail' | 'error';
   message: string;
@@ -37,6 +48,28 @@ export function sendPaginated(
     total,
     page,
     pages,
+  };
+  res.status(statusCode).json(body);
+}
+
+export function sendSuccessWithPagination(
+  res: Response,
+  data: unknown[],
+  total: number,
+  page: number,
+  limit: number,
+  statusCode = 200,
+): void {
+  const totalPages = Math.ceil(total / limit);
+  const body: PaginationSuccessBody = {
+    status: 'success',
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      total_pages: totalPages,
+    },
   };
   res.status(statusCode).json(body);
 }

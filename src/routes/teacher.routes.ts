@@ -9,6 +9,15 @@ import {
   upsertGradeHandler,
   upsertBulkGradesHandler,
 } from '../controllers/grades.controller';
+import {
+  getChatsHandler,
+  getMessagesHandler,
+  sendMessageHandler,
+} from '../controllers/messaging.controller';
+import {
+  getAnnouncementsHandler,
+  publishAnnouncementHandler,
+} from '../controllers/announcements.controller';
 import { authenticate } from '../middlewares/authenticate';
 import { authorizeRoles } from '../middlewares/authorizeRoles';
 import { validateRequest } from '../middlewares/validateRequest';
@@ -20,8 +29,29 @@ import {
   upsertGradeBodySchema,
   bulkUpsertGradeBodySchema,
 } from '../validations/grades.validation';
+import {
+  chatIdParamsSchema,
+  messagesQuerySchema,
+  sendMessageBodySchema,
+} from '../validations/messaging.validation';
+import { publishAnnouncementBodySchema } from '../validations/announcements.validation';
 
 const router = Router();
+
+router.get(
+  '/avisos',
+  authenticate,
+  authorizeRoles('docente', 'admin'),
+  getAnnouncementsHandler,
+);
+
+router.post(
+  '/avisos',
+  authenticate,
+  authorizeRoles('docente', 'admin'),
+  validateRequest({ body: publishAnnouncementBodySchema }),
+  publishAnnouncementHandler,
+);
 
 router.get(
   '/asignaciones',
@@ -71,6 +101,29 @@ router.post(
   authorizeRoles('docente', 'admin'),
   validateRequest({ body: bulkUpsertGradeBodySchema }),
   upsertBulkGradesHandler,
+);
+
+router.get(
+  '/chats',
+  authenticate,
+  authorizeRoles('docente', 'admin'),
+  getChatsHandler,
+);
+
+router.get(
+  '/chats/:chat_id/mensajes',
+  authenticate,
+  authorizeRoles('docente', 'admin'),
+  validateRequest({ params: chatIdParamsSchema, query: messagesQuerySchema }),
+  getMessagesHandler,
+);
+
+router.post(
+  '/chats/:chat_id/mensajes',
+  authenticate,
+  authorizeRoles('docente', 'admin'),
+  validateRequest({ params: chatIdParamsSchema, body: sendMessageBodySchema }),
+  sendMessageHandler,
 );
 
 export default router;

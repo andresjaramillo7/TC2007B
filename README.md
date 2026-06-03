@@ -46,7 +46,13 @@ bun run seed:academic
 # 7. Seed grades (trimester grades for students)
 bun run seed:grades
 
-# 8. Start development server
+# 8. Seed messaging data (chats, participants, messages)
+bun run seed:messaging
+
+# 9. Seed announcements (avisos grupales)
+bun run seed:announcements
+
+# 10. Start development server
 bun run dev
 ```
 
@@ -63,6 +69,8 @@ The server starts at `http://localhost:3000`.
 | `bun run seed` | Insert test users into the database |
 | `bun run seed:academic` | Insert academic data (groups, subjects, assignments, students) |
 | `bun run seed:grades` | Insert sample grades for testing |
+| `bun run seed:messaging` | Insert messaging data (chats, participants, messages) |
+| `bun run seed:announcements` | Insert group announcements for testing |
 | `bun run test` | Run tests |
 | `bun run lint` | Run ESLint |
 | `bun run format` | Format code with Prettier |
@@ -147,9 +155,9 @@ Authorization: Bearer <token>
 
 | Role | Description |
 |---|---|
-| `docente` | Teacher — can manage grades for assigned groups |
+| `docente` | Teacher — can manage grades for assigned groups and message tutors |
 | `tutor` | Parent/tutor — can view children's grades and sign off |
-| `admin` | Administrator — reserved for future use |
+| `admin` | Administrator — can inspect and interact with all chats, and manage announcements for any group |
 
 ## Seed Users
 
@@ -183,6 +191,19 @@ After seeding academic data, run `bun run seed:grades` to insert:
 - Sample data covering grade history and assignment table scenarios
 
 The seed is safe to run multiple times — it uses `ON CONFLICT DO NOTHING`.
+
+## Seed Messaging Data
+
+After seeding users and academic data, run `bun run seed:messaging` to insert:
+
+- 2 tutor-student relationships (`tutor@example.com` linked to Mateo Jaramillo and Sofía Martínez)
+- 3 chats with participants:
+  - Chat 1: teacher1 + tutor about Mateo (with sample messages)
+  - Chat 2: teacher2 + tutor about Mateo (with sample messages)
+  - Chat 3: teacher1 + tutor about Sofía (empty)
+- Sample messages in chats 1 and 2 with mixed read/unread status
+
+The seed is safe to run multiple times — existing chats and participants are not duplicated.
 
 ## Grade Rules
 
@@ -350,6 +371,170 @@ Content-Type: application/json
 }
 ```
 
+## Messaging Endpoints (Teacher Web Platform)
+
+All messaging endpoints require `authenticate` and `authorizeRoles("docente", "admin")`.
+
+### Chat Inbox
+
+Returns the authenticated teacher's chat conversations.
+
+```http
+GET /api/web/docente/chats
+Authorization: Bearer <token>
+```
+
+**Behavior:**
+
+- `docente` — returns only chats where the teacher is a participant
+- `admin` — returns all chats (administrative override)
+- `tutor` — `403 Forbidden`
+- Sorted by most recent activity first; empty chats appear last
+
+**Success response (200):**
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "chat_id": 1,
+      "tutor": {
+        "tutor_id": 3,
+        "nombre": "Carlos",
+        "apellido": "García"
+      },
+      "alumno": {
+        "alumno_id": 5,
+        "nombre": "Mateo",
+        "apellido": "Jaramillo"
+      },
+      "ultimo_mensaje": "Hola Miss, quería preguntarle...",
+      "ultima_fecha": "2026-06-03T15:00:00.000Z",
+      "no_leidos": 2
+    }
+  ]
+}
+```
+
+For a chat with no messages:
+```json
+{
+  "chat_id": 3,
+  "tutor": { "tutor_id": 3, "nombre": "Carlos", "apellido": "García" },
+  "alumno": { "alumno_id": 6, "nombre": "Sofía", "apellido": "Martínez" },
+  "ultimo_mensaje": null,
+  "ultima_fecha": null,
+  "no_leidos": 0
+}
+```
+
+**Unread count rules:**
+- `docente` — counts messages where `leido = false` and `remitente_id` is not the authenticated teacher
+- `admin` — always `0` (admin inspection does not track personal unread messages)
+
+### Read Chat Messages
+
+Returns paginated messages from an authorized chat.
+
+```http
+GET /api/web/docente/chats/:chat_id/mensajes?page=1&limit=20
+Authorization: Bearer <token>
+```
+
+**Path params:**
+
+| Param | Type | Description |
+|---|---|---|
+| `chat_id` | integer | Positive chat ID |
+
+**Query params:**
+
+| Param | Type | Default | Max | Description |
+|---|---|---|---|---|
+| `page` | integer | 1 | — | Page number (positive integer) |
+| `limit` | integer | 20 | 100 | Messages per page |
+
+**Behavior:**
+
+- `docente` — must be a participant in the chat; otherwise `404 Chat not found`
+- `admin` — may read any existing chat without being a participant
+- `tutor` — `403 Forbidden`
+- Messages ordered newest-first (`fecha_envio DESC, id DESC`)
+- After authorization, incoming unread messages are marked as read for `docente`
+- Admin does **not** mark messages as read (inspection-only)
+
+**Success response (200):**
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "mensaje_id": 101,
+      "remitente_id": 3,
+      "contenido": "Buenas tardes",
+      "leido": true,
+      "fecha_envio": "2026-06-03T15:00:00.000Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 1,
+    "total_pages": 1
+  }
+}
+```
+
+### Send Message
+
+Sends a new message inside an authorized chat.
+
+```http
+POST /api/web/docente/chats/:chat_id/mensajes
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "contenido": "Le comento que Mateo ha mostrado un excelente avance."
+}
+```
+
+**Validation rules:**
+
+| Field | Rule |
+|---|---|
+| `contenido` | Trimmed string, 1–2000 visible characters |
+
+**Behavior:**
+
+- `docente` — must be a participant; otherwise `404 Chat not found`
+- `admin` — may send to any existing chat as administrative override (not added to participants)
+- `tutor` — `403 Forbidden`
+- New messages are inserted with `leido = false` and `remitente_id` set to the authenticated user
+
+**Success response (201 Created):**
+```json
+{
+  "status": "success",
+  "data": {
+    "mensaje_id": 102,
+    "remitente_id": 1,
+    "contenido": "Le comento que Mateo ha mostrado un excelente avance.",
+    "leido": false,
+    "fecha_envio": "2026-06-03T15:01:00.000Z"
+  }
+}
+```
+
+**Error responses:**
+
+| Status | Scenario |
+|---|---|
+| 400 | Invalid `chat_id`, empty `contenido`, or `contenido` over 2000 characters |
+| 401 | Missing, invalid, or expired token |
+| 403 | Authenticated `tutor` attempting teacher endpoint |
+| 404 | Chat not found or unauthorized |
+
 ## Academic Endpoints (Teacher Web Platform)
 
 ### Teacher Assignments
@@ -431,6 +616,11 @@ The PostgreSQL schema includes:
 - `asignaciones_docentes` — teacher assignments linking teachers to groups and subjects
 - `alumnos` — students enrolled in groups
 - `calificaciones` — grades linked to students, assignments, and trimesters
+- `tutor_alumno` — links tutors to students with a relationship type
+- `chats` — conversations tied to a student (`alumno_id`)
+- `chat_participantes` — maps users to chats
+- `mensajes` — individual messages within chats
+- `avisos_grupales` — group announcements published by teachers and admins
 
 Run `psql -d grade_tracker -f database/schema.sql` to apply.
 
@@ -458,6 +648,108 @@ curl http://localhost:3000/api/web/docente/asignaciones \
   -H "Authorization: Bearer <token>"
 ```
 
+## Announcements Endpoints (Teacher Web Platform)
+
+All announcement endpoints require `authenticate` and `authorizeRoles("docente", "admin")`.
+
+### List Announcements
+
+Returns announcements visible to the authenticated user.
+
+```http
+GET /api/web/docente/avisos
+Authorization: Bearer <token>
+```
+
+**Behavior:**
+
+- `docente` — returns only announcements created by that teacher
+- `admin` — returns all announcements (administrative override)
+- `tutor` — `403 Forbidden`
+- Sorted by `fecha_publicacion DESC, id DESC`
+
+**Success response (200):**
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "aviso_id": 3,
+      "grupo": { "grupo_id": 1, "nombre": "1° A" },
+      "remitente": {
+        "usuario_id": 1,
+        "nombre": "Ana",
+        "apellido": "López",
+        "rol": "docente"
+      },
+      "titulo": "Material para mañana",
+      "contenido": "Traer geometría y regla.",
+      "fecha_publicacion": "2026-06-03T15:00:00.000Z"
+    }
+  ]
+}
+```
+
+**Error responses:**
+
+| Status | Scenario |
+|---|---|
+| 200 | Empty list returns `{ "status": "success", "data": [] }` |
+| 401 | Missing, invalid, or expired token |
+| 403 | Authenticated `tutor` attempting teacher endpoint |
+
+### Publish Announcement
+
+Publishes a new announcement for an authorized group.
+
+```http
+POST /api/web/docente/avisos
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "grupo_id": 1,
+  "titulo": "Material para mañana",
+  "contenido": "Traer geometría y regla."
+}
+```
+
+**Validation rules:**
+
+| Field | Rule |
+|---|---|
+| `grupo_id` | Positive integer |
+| `titulo` | Trimmed string, 1–150 visible characters |
+| `contenido` | Trimmed string, 1–3000 visible characters |
+
+**Behavior:**
+
+- `docente` — must have at least one assignment in the target group; otherwise `404 Group not found`
+- `admin` — may publish to any existing group; nonexistent group returns `404 Group not found`
+- `tutor` — `403 Forbidden`
+
+**Success response (201 Created):**
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Aviso publicado",
+    "aviso_id": 3
+  }
+}
+```
+
+**Error responses:**
+
+| Status | Scenario |
+|---|---|
+| 400 | Invalid body (missing fields, validation limits exceeded, whitespace-only strings) |
+| 401 | Missing, invalid, or expired token |
+| 403 | Authenticated `tutor` attempting teacher endpoint |
+| 404 | Group not found or teacher not authorized (generic, does not reveal which) |
+
+**Note:** Announcements are not yet available through the mobile parent/tutor routes.
+
 ## API Endpoints
 
 | Prefix | Description | Status |
@@ -470,6 +762,11 @@ curl http://localhost:3000/api/web/docente/asignaciones \
 | `/api/web/docente/asignaciones/:asignacion_id/calificaciones` | Assignment grade table by trimester | Implemented |
 | `POST /api/web/docente/calificaciones` | Individual grade upsert | Implemented |
 | `POST /api/web/docente/calificaciones/bulk` | Bulk grade upsert | Implemented |
+| `GET /api/web/docente/chats` | Teacher chat inbox | Implemented |
+| `GET /api/web/docente/chats/:chat_id/mensajes` | Paginated chat messages | Implemented |
+| `POST /api/web/docente/chats/:chat_id/mensajes` | Send message | Implemented |
+| `GET /api/web/docente/avisos` | List announcements | Implemented |
+| `POST /api/web/docente/avisos` | Publish announcement | Implemented |
 | `/api/mobile` | Parent/tutor endpoints | 501 Not Implemented |
 
 Any other route returns 404.

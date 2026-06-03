@@ -10,6 +10,8 @@
     "seed": "bun src/scripts/seedUsers.ts",
     "seed:academic": "bun src/scripts/seedAcademicData.ts",
     "seed:grades": "bun src/scripts/seedGrades.ts",
+    "seed:messaging": "bun src/scripts/seedMessaging.ts",
+    "seed:announcements": "bun src/scripts/seedAnnouncements.ts",
     "test": "jest",
     "lint": "eslint .",
     "format": "prettier --write ."

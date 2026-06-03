@@ -621,6 +621,7 @@ The PostgreSQL schema includes:
 - `chat_participantes` — maps users to chats
 - `mensajes` — individual messages within chats
 - `avisos_grupales` — group announcements published by teachers and admins
+- `firmas_boleta` — trimester report-card signatures (one per tutor + student + trimester, upsert behavior)
 
 Run `psql -d grade_tracker -f database/schema.sql` to apply.
 
@@ -632,7 +633,7 @@ All API request and response fields should use **snake_case**.
 
 The mobile tutor module is split into two domains:
 - **children** — linked students for the authenticated tutor
-- **report-card** — consolidated report card (future: PDF generation, trimester signatures)
+- **report-card** — consolidated report card (includes trimester signatures, PDF download)
 
 All mobile tutor endpoints require `authenticate` and `authorizeRoles("tutor")`.
 
@@ -746,6 +747,29 @@ Authorization: Bearer <token>
           }
         ]
       }
+    ],
+    "firmas": [
+      {
+        "periodo": "primer trimestre",
+        "firmada": true,
+        "firma_id": 1,
+        "comentario": "Enterado, gracias.",
+        "fecha_firma": "2026-06-03T15:00:00.000Z"
+      },
+      {
+        "periodo": "segundo trimestre",
+        "firmada": false,
+        "firma_id": null,
+        "comentario": null,
+        "fecha_firma": null
+      },
+      {
+        "periodo": "tercer trimestre",
+        "firmada": false,
+        "firma_id": null,
+        "comentario": null,
+        "fecha_firma": null
+      }
     ]
   }
 }
@@ -758,6 +782,124 @@ Authorization: Bearer <token>
 - Missing trimester grades return `nota: null`, `comentario: null`, `fecha_registro: null`
 - Subjects are sorted by subject name, then teacher name
 - Groups with no assignments return `boleta: []`
+- Always includes a `firmas` array with all 3 trimester slots in fixed order
+- Signed trimesters show `firmada: true` with populated `firma_id`, `comentario`, `fecha_firma`
+- Unsigned trimesters show `firmada: false` with null values
+- Only the authenticated tutor's signatures are included
+
+### Sign Trimester Report Card
+
+Allows a tutor to sign (acknowledge) a linked student's report card for one trimester.
+
+```http
+POST /api/movil/tutor/hijos/:alumno_id/boletas/:periodo/firma
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Path params:**
+
+| Param | Type | Description |
+|---|---|---|
+| `alumno_id` | integer | Positive student ID |
+| `periodo` | string | One of: `primer trimestre`, `segundo trimestre`, `tercer trimestre` |
+
+**Body:**
+
+```json
+{
+  "comentario": "Enterado, gracias."
+}
+```
+
+The body may also be `{}` or `{ "comentario": null }`.
+
+**Validation:**
+
+| Field | Rule |
+|---|---|
+| `comentario` | Optional, nullable, string when present, trimmed, max 500 characters |
+
+**Behavior:**
+- One signature per tutor + student + trimester
+- Uses PostgreSQL upsert (`ON CONFLICT ... DO UPDATE`)
+- Signing again updates the comment and `fecha_firma`
+- Requires at least one grade to exist for the selected trimester
+- Cannot sign an empty trimester (returns `400 Bad Request`)
+
+**Success response (200):**
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Boleta firmada con éxito",
+    "firma": {
+      "firma_id": 1,
+      "alumno_id": 5,
+      "periodo": "primer trimestre",
+      "comentario": "Enterado, gracias.",
+      "fecha_firma": "2026-06-03T15:00:00.000Z"
+    }
+  }
+}
+```
+
+**Errors:**
+
+| Condition | Status |
+|---|---|
+| Unlinked or nonexistent student | 404 Student not found |
+| No grades for the selected trimester | 400 Report card has no grades for this period |
+| Invalid `alumno_id` | 400 Validation failed |
+| Invalid `periodo` | 400 Validation failed |
+| Comment over 500 chars | 400 Validation failed |
+| `docente` or `admin` | 403 Forbidden |
+| Missing/invalid JWT | 401 Unauthorized |
+
+### Download Report Card PDF
+
+Generates and downloads a dynamic PDF with the linked student's consolidated report card.
+
+```http
+GET /api/movil/tutor/hijos/:alumno_id/calificaciones/pdf
+Authorization: Bearer <token>
+```
+
+**Path params:**
+
+| Param | Type | Description |
+|---|---|---|
+| `alumno_id` | integer | Positive student ID |
+
+**Response:** Binary PDF with:
+
+```
+Content-Type: application/pdf
+Content-Disposition: attachment; filename="boleta-mateo-jaramillo.pdf"
+```
+
+**PDF contents:**
+- Title: Boleta de calificaciones
+- Student full name, group, school year
+- Generation date
+- Per-subject table: subject name, teacher, all 3 trimester grades, comments
+- Signature status per trimester (signed or pending, date, comment)
+
+**Behavior:**
+- Generated dynamically in memory — no files stored on disk
+- Reuses the same consolidated report-card logic (no SQL duplication)
+- Uses built-in Helvetica fonts — no custom fonts, logos, or images
+- PDF can be downloaded whether or not any trimester has been signed
+- Filename is sanitized: lowercase, accents removed, spaces → hyphens
+
+**Errors:**
+
+| Condition | Status |
+|---|---|
+| Unlinked or nonexistent student | 404 Student not found |
+| Invalid `alumno_id` | 400 Validation failed |
+| `docente` or `admin` | 403 Forbidden |
+| Missing/invalid JWT | 401 Unauthorized |
 
 ## Testing Locally
 
@@ -900,6 +1042,8 @@ Content-Type: application/json
 | `POST /api/web/docente/avisos` | Publish announcement | Implemented |
 | `GET /api/movil/tutor/hijos` | Linked children (tutor mobile) | Implemented |
 | `GET /api/movil/tutor/hijos/:alumno_id/calificaciones` | Consolidated report card (tutor mobile) | Implemented |
+| `POST /api/movil/tutor/hijos/:alumno_id/boletas/:periodo/firma` | Sign trimester report card (tutor mobile) | Implemented |
+| `GET /api/movil/tutor/hijos/:alumno_id/calificaciones/pdf` | Download report card PDF (tutor mobile) | Implemented |
 
 Any other route returns 404.
 

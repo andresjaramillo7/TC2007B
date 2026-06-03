@@ -121,3 +121,21 @@ CREATE INDEX IF NOT EXISTS idx_avisos_grupales_remitente_fecha
 
 CREATE INDEX IF NOT EXISTS idx_avisos_grupales_grupo_fecha
   ON avisos_grupales(grupo_id, fecha_publicacion DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS firmas_boleta (
+  id SERIAL PRIMARY KEY,
+  tutor_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+  alumno_id INTEGER NOT NULL REFERENCES alumnos(id) ON DELETE RESTRICT,
+  periodo VARCHAR(30) NOT NULL CHECK (
+    periodo IN (
+      'primer trimestre',
+      'segundo trimestre',
+      'tercer trimestre'
+    )
+  ),
+  comentario TEXT CHECK (
+    comentario IS NULL OR CHAR_LENGTH(comentario) <= 500
+  ),
+  fecha_firma TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (tutor_id, alumno_id, periodo)
+);

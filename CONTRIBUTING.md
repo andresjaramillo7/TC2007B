@@ -161,6 +161,8 @@ GET  /api/web/docente/avisos
 POST /api/web/docente/avisos          
 GET  /api/movil/tutor/hijos           
 GET  /api/movil/tutor/hijos/:alumno_id/calificaciones
+POST /api/movil/tutor/hijos/:alumno_id/boletas/:periodo/firma
+GET  /api/movil/tutor/hijos/:alumno_id/calificaciones/pdf
 ...                                   
 ```
 

@@ -1,5 +1,9 @@
 import { query } from '../db/connection';
-import type { ChildRow, GradeRow } from '../types/report-card.types';
+import type {
+  ChildRow,
+  GradeRow,
+  SignatureRow,
+} from '../types/report-card.types';
 
 export async function findChildByTutorAndStudentId(
   tutorId: number,
@@ -68,4 +72,65 @@ export async function findConsolidatedGradesByStudentAndGroupId(
     [studentId, groupId],
   );
   return rows as GradeRow[];
+}
+
+export async function findSignaturesByTutorAndStudentId(
+  tutorId: number,
+  studentId: number,
+): Promise<SignatureRow[]> {
+  const rows = await query(
+    `SELECT
+      id AS firma_id,
+      alumno_id,
+      periodo,
+      comentario,
+      fecha_firma
+    FROM firmas_boleta
+    WHERE tutor_id = $1 AND alumno_id = $2
+    ORDER BY
+      CASE periodo
+        WHEN 'primer trimestre' THEN 1
+        WHEN 'segundo trimestre' THEN 2
+        WHEN 'tercer trimestre' THEN 3
+      END`,
+    [tutorId, studentId],
+  );
+  return rows as SignatureRow[];
+}
+
+export async function upsertReportCardSignature(
+  tutorId: number,
+  studentId: number,
+  periodo: string,
+  comentario: string | null,
+): Promise<SignatureRow> {
+  const rows = await query(
+    `INSERT INTO firmas_boleta (tutor_id, alumno_id, periodo, comentario)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (tutor_id, alumno_id, periodo)
+     DO UPDATE SET
+       comentario = EXCLUDED.comentario,
+       fecha_firma = CURRENT_TIMESTAMP
+     RETURNING
+       id AS firma_id,
+       alumno_id,
+       periodo,
+       comentario,
+       fecha_firma`,
+    [tutorId, studentId, periodo, comentario],
+  );
+  return rows[0] as SignatureRow;
+}
+
+export async function countGradesForStudentAndPeriod(
+  studentId: number,
+  periodo: string,
+): Promise<number> {
+  const rows = await query(
+    `SELECT COUNT(*)::int AS count
+     FROM calificaciones
+     WHERE alumno_id = $1 AND periodo = $2`,
+    [studentId, periodo],
+  );
+  return (rows[0] as { count: number }).count;
 }

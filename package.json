@@ -8,6 +8,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "seed": "bun src/scripts/seedUsers.ts",
+    "seed:academic": "bun src/scripts/seedAcademicData.ts",
     "test": "jest",
     "lint": "eslint .",
     "format": "prettier --write ."

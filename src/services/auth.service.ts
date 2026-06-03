@@ -12,7 +12,7 @@ export interface PublicUser {
   nombre: string;
   apellido: string;
   rol: string;
-  fotoUrl: string | null;
+  foto_url: string | null;
 }
 
 export interface LoginResult {

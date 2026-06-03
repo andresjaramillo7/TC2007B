@@ -6,7 +6,7 @@ export interface PublicUser {
   nombre: string;
   apellido: string;
   rol: string;
-  fotoUrl: string | null;
+  foto_url: string | null;
 }
 
 export function sanitizeUser(user: UserRow): PublicUser {
@@ -16,6 +16,6 @@ export function sanitizeUser(user: UserRow): PublicUser {
     nombre: user.nombre,
     apellido: user.apellido,
     rol: user.rol,
-    fotoUrl: user.foto_url,
+    foto_url: user.foto_url,
   };
 }

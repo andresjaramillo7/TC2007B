@@ -82,10 +82,10 @@ describe('GET /api/mobile/test', () => {
 });
 
 describe('GET /api/teacher/test', () => {
-  it('should return 501 not implemented', async () => {
+  it('should return 404 after migration to /api/web/docente', async () => {
     const res = await request(app).get('/api/teacher/test');
-    expect(res.status).toBe(501);
-    expect(res.body.message).toBe('Teacher endpoints not yet implemented');
+    expect(res.status).toBe(404);
+    expect(res.body.message).toBe('Route not found');
   });
 });
 
@@ -106,7 +106,7 @@ describe('POST /api/auth/login', () => {
       nombre: 'Ana',
       apellido: 'López',
       rol: 'docente',
-      fotoUrl: null,
+      foto_url: null,
     });
     expect(res.body.data.user).not.toHaveProperty('password_hash');
   });
@@ -189,7 +189,7 @@ describe('GET /api/auth/me', () => {
       nombre: 'Ana',
       apellido: 'López',
       rol: 'docente',
-      fotoUrl: null,
+      foto_url: null,
     });
   });
 

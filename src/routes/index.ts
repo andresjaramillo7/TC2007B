@@ -7,6 +7,6 @@ const router = Router();
 
 router.use('/api/auth', authRoutes);
 router.use('/api/mobile', mobileRoutes);
-router.use('/api/teacher', teacherRoutes);
+router.use('/api/web/docente', teacherRoutes);
 
 export default router;

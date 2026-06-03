@@ -1,13 +1,28 @@
-import { Router, Request, Response } from 'express';
-import { HTTP_STATUS } from '../constants';
+import { Router } from 'express';
+import {
+  getAssignmentsHandler,
+  getStudentsByGroupHandler,
+} from '../controllers/academic.controller';
+import { authenticate } from '../middlewares/authenticate';
+import { authorizeRoles } from '../middlewares/authorizeRoles';
+import { validateRequest } from '../middlewares/validateRequest';
+import { groupIdParamsSchema } from '../validations/academic.validation';
 
 const router = Router();
 
-router.use((_req: Request, res: Response) => {
-  res.status(HTTP_STATUS.NOT_IMPLEMENTED).json({
-    status: 'fail',
-    message: 'Teacher endpoints not yet implemented',
-  });
-});
+router.get(
+  '/asignaciones',
+  authenticate,
+  authorizeRoles('docente', 'admin'),
+  getAssignmentsHandler,
+);
+
+router.get(
+  '/grupos/:grupo_id/alumnos',
+  authenticate,
+  authorizeRoles('docente', 'admin'),
+  validateRequest({ params: groupIdParamsSchema }),
+  getStudentsByGroupHandler,
+);
 
 export default router;

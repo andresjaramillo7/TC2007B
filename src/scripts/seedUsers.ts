@@ -2,27 +2,10 @@ import pool from '../db/connection';
 import bcrypt from 'bcryptjs';
 
 const SEED_USERS = [
-  {
-    email: 'teacher@example.com',
-    password: 'password123',
-    nombre: 'Ana',
-    apellido: 'López',
-    rol: 'docente',
-  },
-  {
-    email: 'tutor@example.com',
-    password: 'password123',
-    nombre: 'Carlos',
-    apellido: 'García',
-    rol: 'tutor',
-  },
-  {
-    email: 'admin@example.com',
-    password: 'password123',
-    nombre: 'María',
-    apellido: 'Administrador',
-    rol: 'admin',
-  },
+  { email: 'teacher@example.com', password: 'password123', nombre: 'Ana', apellido: 'López', rol: 'docente' },
+  { email: 'teacher2@example.com', password: 'password123', nombre: 'Pedro', apellido: 'Ruiz', rol: 'docente' },
+  { email: 'tutor@example.com', password: 'password123', nombre: 'Carlos', apellido: 'García', rol: 'tutor' },
+  { email: 'admin@example.com', password: 'password123', nombre: 'María', apellido: 'Administrador', rol: 'admin' },
 ];
 
 async function seed() {

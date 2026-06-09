@@ -76,7 +76,6 @@ export interface SignatureRow {
   firma_id: number;
   alumno_id: number;
   periodo: string;
-  comentario: string | null;
   fecha_firma: string;
 }
 
@@ -84,6 +83,5 @@ export interface ReportCardFirmaSlot {
   periodo: string;
   firmada: boolean;
   firma_id: number | null;
-  comentario: string | null;
   fecha_firma: string | null;
 }

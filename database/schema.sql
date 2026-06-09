@@ -136,9 +136,6 @@ CREATE TABLE IF NOT EXISTS firmas_boleta (
       'tercer trimestre'
     )
   ),
-  comentario TEXT CHECK (
-    comentario IS NULL OR CHAR_LENGTH(comentario) <= 500
-  ),
   fecha_firma TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (tutor_id, alumno_id, periodo)
 );

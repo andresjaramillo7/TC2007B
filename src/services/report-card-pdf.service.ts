@@ -120,9 +120,6 @@ export async function generateReportCardPdf(
       if (firma.firmada) {
         doc.font('Helvetica').fontSize(11).text(`Firmada`);
         doc.font('Helvetica').fontSize(10).text(`  Fecha de firma: ${firma.fecha_firma ? formatDate(new Date(firma.fecha_firma)) : '—'}`);
-        if (firma.comentario) {
-          doc.font('Helvetica').fontSize(10).text(`  Comentario: ${firma.comentario}`);
-        }
       } else {
         doc.font('Helvetica').fontSize(11).text(`Pendiente`);
       }

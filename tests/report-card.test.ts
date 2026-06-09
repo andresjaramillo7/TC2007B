@@ -114,7 +114,6 @@ const mockSignatures = [
     firma_id: 1,
     alumno_id: 5,
     periodo: 'primer trimestre',
-    comentario: 'Enterado, gracias.',
     fecha_firma: '2026-06-03T15:00:00.000Z',
   },
 ];
@@ -124,21 +123,18 @@ const mockAllThreeSignatures = [
     firma_id: 1,
     alumno_id: 5,
     periodo: 'primer trimestre',
-    comentario: 'Enterado, gracias.',
     fecha_firma: '2026-06-03T15:00:00.000Z',
   },
   {
     firma_id: 2,
     alumno_id: 5,
     periodo: 'segundo trimestre',
-    comentario: null,
     fecha_firma: '2026-06-04T10:00:00.000Z',
   },
   {
     firma_id: 3,
     alumno_id: 5,
     periodo: 'tercer trimestre',
-    comentario: 'Revisado',
     fecha_firma: '2026-06-05T12:00:00.000Z',
   },
 ];
@@ -400,7 +396,6 @@ describe('GET /api/movil/tutor/hijos/:alumno_id/calificaciones', () => {
       for (const firma of res.body.data.firmas) {
         expect(firma.firmada).toBe(false);
         expect(firma.firma_id).toBeNull();
-        expect(firma.comentario).toBeNull();
         expect(firma.fecha_firma).toBeNull();
       }
     });
@@ -416,7 +411,6 @@ describe('GET /api/movil/tutor/hijos/:alumno_id/calificaciones', () => {
 
       expect(res.body.data.firmas[0].firmada).toBe(true);
       expect(res.body.data.firmas[0].firma_id).toBe(1);
-      expect(res.body.data.firmas[0].comentario).toBe('Enterado, gracias.');
       expect(res.body.data.firmas[0].fecha_firma).toBe('2026-06-03T15:00:00.000Z');
     });
 

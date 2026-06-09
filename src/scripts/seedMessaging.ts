@@ -77,7 +77,7 @@ async function seedMessaging(): Promise<void> {
 
     // Fetch required assignments
     const assignmentsResult = await client.query<AssignmentRow>(
-      `SELECT ad.id, ad.docente_id, ad.grupo_id, m.nombre_materia
+      `       SELECT ad.id, ad.docente_id, ad.grupo_id, m.nombre_materia AS materia_nombre
        FROM asignaciones_docentes ad
        JOIN materias m ON m.id = ad.materia_id
        WHERE (ad.docente_id, ad.grupo_id, m.nombre_materia) IN (
@@ -100,6 +100,12 @@ async function seedMessaging(): Promise<void> {
     const historiaAssignment = assignmentsResult.rows.find(
       (r) => r.docente_id === teacher2Id && r.materia_nombre === 'Historia',
     )!;
+
+    if (!matematicasAssignment || !historiaAssignment) {
+      throw new Error(
+        'Required academic assignments were not found: expected Matemáticas for teacher1 and Historia for teacher2.',
+      );
+    }
 
     // Create tutor-alumno relationships
     await client.query(

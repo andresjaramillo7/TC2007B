@@ -13,6 +13,4 @@ export const signReportCardParamsSchema = z.object({
   ]),
 });
 
-export const signReportCardBodySchema = z.object({
-  comentario: z.string().trim().max(500).nullable().optional(),
-});
+export const signReportCardBodySchema = z.object({}).strict().optional();

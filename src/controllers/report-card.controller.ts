@@ -27,8 +27,7 @@ export async function signReportCardHandler(
     const { userId } = req.user!;
     const studentId = Number(req.params.alumno_id);
     const periodo = String(req.params.periodo);
-    const comentario = req.body.comentario;
-    const result = await signReportCard(userId, studentId, periodo, comentario);
+    const result = await signReportCard(userId, studentId, periodo);
     sendSuccess(res, result);
   } catch (err) {
     next(err);

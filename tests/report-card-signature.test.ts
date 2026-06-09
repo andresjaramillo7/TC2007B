@@ -34,7 +34,6 @@ const mockUpsertResult = {
   firma_id: 1,
   alumno_id: 5,
   periodo: 'primer trimestre',
-  comentario: 'Enterado, gracias.',
   fecha_firma: '2026-06-03T15:00:00.000Z',
 };
 
@@ -61,7 +60,7 @@ describe('POST /api/movil/tutor/hijos/:alumno_id/boletas/:periodo/firma', () => 
     const res = await request(app)
       .post('/api/movil/tutor/hijos/5/boletas/primer%20trimestre/firma')
       .set('Authorization', `Bearer ${tutorToken}`)
-      .send({ comentario: 'Enterado, gracias.' });
+      .send({});
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('success');
@@ -77,7 +76,7 @@ describe('POST /api/movil/tutor/hijos/:alumno_id/boletas/:periodo/firma', () => 
     const res = await request(app)
       .post('/api/movil/tutor/hijos/5/boletas/primer%20trimestre/firma')
       .set('Authorization', `Bearer ${tutorToken}`)
-      .send({ comentario: 'Enterado, gracias.' });
+      .send({});
 
     expect(res.body.data.firma).toHaveProperty('firma_id');
     expect(res.body.data.firma.firma_id).toBe(1);
@@ -91,7 +90,7 @@ describe('POST /api/movil/tutor/hijos/:alumno_id/boletas/:periodo/firma', () => 
     const res = await request(app)
       .post('/api/movil/tutor/hijos/5/boletas/primer%20trimestre/firma')
       .set('Authorization', `Bearer ${tutorToken}`)
-      .send({ comentario: 'Enterado, gracias.' });
+      .send({});
 
     expect(res.body.data.firma).toHaveProperty('alumno_id');
     expect(res.body.data.firma.alumno_id).toBe(5);
@@ -105,7 +104,7 @@ describe('POST /api/movil/tutor/hijos/:alumno_id/boletas/:periodo/firma', () => 
     const res = await request(app)
       .post('/api/movil/tutor/hijos/5/boletas/primer%20trimestre/firma')
       .set('Authorization', `Bearer ${tutorToken}`)
-      .send({ comentario: 'Enterado, gracias.' });
+      .send({});
 
     expect(res.body.data.firma).toHaveProperty('periodo');
     expect(res.body.data.firma.periodo).toBe('primer trimestre');
@@ -119,7 +118,7 @@ describe('POST /api/movil/tutor/hijos/:alumno_id/boletas/:periodo/firma', () => 
     const res = await request(app)
       .post('/api/movil/tutor/hijos/5/boletas/primer%20trimestre/firma')
       .set('Authorization', `Bearer ${tutorToken}`)
-      .send({ comentario: 'Enterado, gracias.' });
+      .send({});
 
     expect(res.body.data.firma).toHaveProperty('fecha_firma');
     expect(res.body.data.firma.fecha_firma).toBe('2026-06-03T15:00:00.000Z');
@@ -128,10 +127,7 @@ describe('POST /api/movil/tutor/hijos/:alumno_id/boletas/:periodo/firma', () => 
   it('should accept empty body', async () => {
     (findChildByTutorAndStudentId as jest.Mock).mockResolvedValue(mockChildMateo);
     (countGradesForStudentAndPeriod as jest.Mock).mockResolvedValue(3);
-    (upsertReportCardSignature as jest.Mock).mockResolvedValue({
-      ...mockUpsertResult,
-      comentario: null,
-    });
+    (upsertReportCardSignature as jest.Mock).mockResolvedValue(mockUpsertResult);
 
     const res = await request(app)
       .post('/api/movil/tutor/hijos/5/boletas/primer%20trimestre/firma')
@@ -141,50 +137,26 @@ describe('POST /api/movil/tutor/hijos/:alumno_id/boletas/:periodo/firma', () => 
     expect(res.status).toBe(200);
   });
 
-  it('should accept comentario null', async () => {
-    (findChildByTutorAndStudentId as jest.Mock).mockResolvedValue(mockChildMateo);
-    (countGradesForStudentAndPeriod as jest.Mock).mockResolvedValue(3);
-    (upsertReportCardSignature as jest.Mock).mockResolvedValue({
-      ...mockUpsertResult,
-      comentario: null,
-    });
-
-    const res = await request(app)
-      .post('/api/movil/tutor/hijos/5/boletas/primer%20trimestre/firma')
-      .set('Authorization', `Bearer ${tutorToken}`)
-      .send({ comentario: null });
-
-    expect(res.status).toBe(200);
-  });
-
-  it('should trim whitespace from comentario', async () => {
+  it('should accept omitted body', async () => {
     (findChildByTutorAndStudentId as jest.Mock).mockResolvedValue(mockChildMateo);
     (countGradesForStudentAndPeriod as jest.Mock).mockResolvedValue(3);
     (upsertReportCardSignature as jest.Mock).mockResolvedValue(mockUpsertResult);
 
-    await request(app)
+    const res = await request(app)
       .post('/api/movil/tutor/hijos/5/boletas/primer%20trimestre/firma')
-      .set('Authorization', `Bearer ${tutorToken}`)
-      .send({ comentario: '   Enterado   ' });
+      .set('Authorization', `Bearer ${tutorToken}`);
 
-    expect(upsertReportCardSignature).toHaveBeenCalledWith(
-      expect.any(Number),
-      expect.any(Number),
-      expect.any(String),
-      'Enterado',
-    );
+    expect(res.status).toBe(200);
   });
 
-  it('should return 400 for comentario over 500 chars', async () => {
+  it('should return 400 for unexpected body fields', async () => {
     (findChildByTutorAndStudentId as jest.Mock).mockResolvedValue(mockChildMateo);
     (countGradesForStudentAndPeriod as jest.Mock).mockResolvedValue(3);
-
-    const longComment = 'x'.repeat(501);
 
     const res = await request(app)
       .post('/api/movil/tutor/hijos/5/boletas/primer%20trimestre/firma')
       .set('Authorization', `Bearer ${tutorToken}`)
-      .send({ comentario: longComment });
+      .send({ comentario: 'Unexpected field' });
 
     expect(res.status).toBe(400);
   });
@@ -195,7 +167,7 @@ describe('POST /api/movil/tutor/hijos/:alumno_id/boletas/:periodo/firma', () => 
     const res = await request(app)
       .post('/api/movil/tutor/hijos/5/boletas/invalido/firma')
       .set('Authorization', `Bearer ${tutorToken}`)
-      .send({ comentario: 'Enterado' });
+      .send({});
 
     expect(res.status).toBe(400);
   });
@@ -204,7 +176,7 @@ describe('POST /api/movil/tutor/hijos/:alumno_id/boletas/:periodo/firma', () => 
     const res = await request(app)
       .post('/api/movil/tutor/hijos/abc/boletas/primer%20trimestre/firma')
       .set('Authorization', `Bearer ${tutorToken}`)
-      .send({ comentario: 'Enterado' });
+      .send({});
 
     expect(res.status).toBe(400);
   });
@@ -213,7 +185,7 @@ describe('POST /api/movil/tutor/hijos/:alumno_id/boletas/:periodo/firma', () => 
     const res = await request(app)
       .post('/api/movil/tutor/hijos/0/boletas/primer%20trimestre/firma')
       .set('Authorization', `Bearer ${tutorToken}`)
-      .send({ comentario: 'Enterado' });
+      .send({});
 
     expect(res.status).toBe(400);
   });
@@ -222,7 +194,7 @@ describe('POST /api/movil/tutor/hijos/:alumno_id/boletas/:periodo/firma', () => 
     const res = await request(app)
       .post('/api/movil/tutor/hijos/-1/boletas/primer%20trimestre/firma')
       .set('Authorization', `Bearer ${tutorToken}`)
-      .send({ comentario: 'Enterado' });
+      .send({});
 
     expect(res.status).toBe(400);
   });
@@ -233,7 +205,7 @@ describe('POST /api/movil/tutor/hijos/:alumno_id/boletas/:periodo/firma', () => 
     const res = await request(app)
       .post('/api/movil/tutor/hijos/999/boletas/primer%20trimestre/firma')
       .set('Authorization', `Bearer ${tutorToken}`)
-      .send({ comentario: 'Enterado' });
+      .send({});
 
     expect(res.status).toBe(404);
     expect(res.body.message).toBe('Student not found');
@@ -245,7 +217,7 @@ describe('POST /api/movil/tutor/hijos/:alumno_id/boletas/:periodo/firma', () => 
     const res = await request(app)
       .post('/api/movil/tutor/hijos/99999/boletas/primer%20trimestre/firma')
       .set('Authorization', `Bearer ${tutorToken}`)
-      .send({ comentario: 'Enterado' });
+      .send({});
 
     expect(res.status).toBe(404);
     expect(res.body.message).toBe('Student not found');
@@ -259,7 +231,7 @@ describe('POST /api/movil/tutor/hijos/:alumno_id/boletas/:periodo/firma', () => 
     const res = await request(app)
       .post('/api/movil/tutor/hijos/5/boletas/primer%20trimestre/firma')
       .set('Authorization', `Bearer ${tutorToken}`)
-      .send({ comentario: 'Enterado' });
+      .send({});
 
     expect(res.status).toBe(200);
   });
@@ -271,7 +243,7 @@ describe('POST /api/movil/tutor/hijos/:alumno_id/boletas/:periodo/firma', () => 
     const res = await request(app)
       .post('/api/movil/tutor/hijos/5/boletas/primer%20trimestre/firma')
       .set('Authorization', `Bearer ${tutorToken}`)
-      .send({ comentario: 'Enterado' });
+      .send({});
 
     expect(res.status).toBe(400);
     expect(res.body.message).toBe('Report card has no grades for this period');
@@ -281,7 +253,7 @@ describe('POST /api/movil/tutor/hijos/:alumno_id/boletas/:periodo/firma', () => 
     const res = await request(app)
       .post('/api/movil/tutor/hijos/5/boletas/primer%20trimestre/firma')
       .set('Authorization', `Bearer ${docenteToken}`)
-      .send({ comentario: 'Enterado' });
+      .send({});
 
     expect(res.status).toBe(403);
     expect(res.body.message).toBe('Forbidden');
@@ -291,7 +263,7 @@ describe('POST /api/movil/tutor/hijos/:alumno_id/boletas/:periodo/firma', () => 
     const res = await request(app)
       .post('/api/movil/tutor/hijos/5/boletas/primer%20trimestre/firma')
       .set('Authorization', `Bearer ${adminToken}`)
-      .send({ comentario: 'Enterado' });
+      .send({});
 
     expect(res.status).toBe(403);
     expect(res.body.message).toBe('Forbidden');
@@ -300,7 +272,7 @@ describe('POST /api/movil/tutor/hijos/:alumno_id/boletas/:periodo/firma', () => 
   it('should return 401 without Authorization header', async () => {
     const res = await request(app)
       .post('/api/movil/tutor/hijos/5/boletas/primer%20trimestre/firma')
-      .send({ comentario: 'Enterado' });
+      .send({});
 
     expect(res.status).toBe(401);
     expect(res.body.message).toBe('Authentication required');
@@ -310,7 +282,7 @@ describe('POST /api/movil/tutor/hijos/:alumno_id/boletas/:periodo/firma', () => 
     const res = await request(app)
       .post('/api/movil/tutor/hijos/5/boletas/primer%20trimestre/firma')
       .set('Authorization', 'Bearer invalid-token')
-      .send({ comentario: 'Enterado' });
+      .send({});
 
     expect(res.status).toBe(401);
     expect(res.body.message).toBe('Invalid or expired token');
@@ -324,8 +296,57 @@ describe('POST /api/movil/tutor/hijos/:alumno_id/boletas/:periodo/firma', () => 
     await request(app)
       .post('/api/movil/tutor/hijos/5/boletas/primer%20trimestre/firma')
       .set('Authorization', `Bearer ${tutorToken}`)
-      .send({ comentario: 'Enterado' });
+      .send({});
 
-    expect(upsertReportCardSignature).toHaveBeenCalledWith(3, 5, 'primer trimestre', 'Enterado');
+    expect(upsertReportCardSignature).toHaveBeenCalledWith(3, 5, 'primer trimestre');
+  });
+
+  it('should idempotently update fecha_firma on duplicate signature', async () => {
+    (findChildByTutorAndStudentId as jest.Mock).mockResolvedValue(mockChildMateo);
+    (countGradesForStudentAndPeriod as jest.Mock).mockResolvedValue(3);
+
+    const firstResult = {
+      firma_id: 1,
+      alumno_id: 5,
+      periodo: 'primer trimestre',
+      fecha_firma: '2026-06-03T15:00:00.000Z',
+    };
+    const secondResult = {
+      firma_id: 1,
+      alumno_id: 5,
+      periodo: 'primer trimestre',
+      fecha_firma: '2026-06-08T10:00:00.000Z',
+    };
+
+    (upsertReportCardSignature as jest.Mock)
+      .mockResolvedValueOnce(firstResult)
+      .mockResolvedValueOnce(secondResult);
+
+    const res1 = await request(app)
+      .post('/api/movil/tutor/hijos/5/boletas/primer%20trimestre/firma')
+      .set('Authorization', `Bearer ${tutorToken}`)
+      .send({});
+    expect(res1.body.data.firma.fecha_firma).toBe('2026-06-03T15:00:00.000Z');
+
+    const res2 = await request(app)
+      .post('/api/movil/tutor/hijos/5/boletas/primer%20trimestre/firma')
+      .set('Authorization', `Bearer ${tutorToken}`)
+      .send({});
+    expect(res2.body.data.firma.fecha_firma).toBe('2026-06-08T10:00:00.000Z');
+
+    expect(upsertReportCardSignature).toHaveBeenCalledTimes(2);
+  });
+
+  it('should not return comentario in response', async () => {
+    (findChildByTutorAndStudentId as jest.Mock).mockResolvedValue(mockChildMateo);
+    (countGradesForStudentAndPeriod as jest.Mock).mockResolvedValue(3);
+    (upsertReportCardSignature as jest.Mock).mockResolvedValue(mockUpsertResult);
+
+    const res = await request(app)
+      .post('/api/movil/tutor/hijos/5/boletas/primer%20trimestre/firma')
+      .set('Authorization', `Bearer ${tutorToken}`)
+      .send({});
+
+    expect(res.body.data.firma).not.toHaveProperty('comentario');
   });
 });

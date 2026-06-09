@@ -1,0 +1,30 @@
+[0;1;32m●[0m postgresql.service - PostgreSQL database server
+     Loaded: loaded (]8;;file://andrespc/usr/lib/systemd/system/postgresql.service\/usr/lib/systemd/system/postgresql.service]8;;\; [0;1;32menabled[0m; preset: [0;1;38:5:185mdisabled[0m)
+     Active: [0;1;32mactive (running)[0m since Fri 2026-06-05 03:24:16 CST; 6h ago
+ Invocation: 0c796051ef6f40acb19413bcdb6610c0
+       Docs: ]8;;man:postgres(1)\man:postgres(1)]8;;\
+   Main PID: 641 (postgres)
+      Tasks: 9[0;38:5:245m (limit: 38147)[0m
+     Memory: 51.6M (peak: 54.1M)
+        CPU: 280ms
+     CGroup: /system.slice/postgresql.service
+             ├─[0;38:5:245m641 /usr/bin/postgres -D /var/lib/postgres/data[0m
+             ├─[0;38:5:245m648 "postgres: io worker 0"[0m
+             ├─[0;38:5:245m649 "postgres: io worker 1"[0m
+             ├─[0;38:5:245m650 "postgres: io worker 2"[0m
+             ├─[0;38:5:245m651 "postgres: checkpointer "[0m
+             ├─[0;38:5:245m652 "postgres: background writer "[0m
+             ├─[0;38:5:245m654 "postgres: walwriter "[0m
+             ├─[0;38:5:245m655 "postgres: autovacuum launcher "[0m
+             └─[0;38:5:245m656 "postgres: logical replication launcher "[0m
+
+Jun 05 03:24:16 andrespc systemd[1]: Starting PostgreSQL database server...
+Jun 05 03:24:16 andrespc postgres[641]: 2026-06-05 03:24:16.808 CST [641] LOG:  starting PostgreSQL 18.4 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 16.1.1 20260430, 64-bit
+Jun 05 03:24:16 andrespc postgres[641]: 2026-06-05 03:24:16.808 CST [641] LOG:  listening on IPv6 address "::1", port 5432
+Jun 05 03:24:16 andrespc postgres[641]: 2026-06-05 03:24:16.808 CST [641] LOG:  listening on IPv4 address "127.0.0.1", port 5432
+Jun 05 03:24:16 andrespc postgres[641]: 2026-06-05 03:24:16.810 CST [641] LOG:  listening on Unix socket "/run/postgresql/.s.PGSQL.5432"
+Jun 05 03:24:16 andrespc postgres[653]: 2026-06-05 03:24:16.825 CST [653] LOG:  database system was shut down at 2026-06-03 14:04:01 CST
+Jun 05 03:24:16 andrespc postgres[641]: 2026-06-05 03:24:16.841 CST [641] LOG:  database system is ready to accept connections
+Jun 05 03:24:16 andrespc systemd[1]: Started PostgreSQL database server.
+Jun 05 09:29:14 andrespc postgres[651]: 2026-06-05 09:29:14.611 CST [651] LOG:  checkpoint starting: time
+Jun 05 09:29:14 andrespc postgres[651]: 2026-06-05 09:29:14.675 CST [651] LOG:  checkpoint complete: wrote 0 buffers (0.0%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=0.017 s, sync=0.007 s, total=0.064 s; sync files=2, longest=0.004 s, average=0.004 s; distance=0 kB, estimate=0 kB; lsn=0/1D18C78, redo lsn=0/1D18C20

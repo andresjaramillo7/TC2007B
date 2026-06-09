@@ -83,7 +83,6 @@ export async function findSignaturesByTutorAndStudentId(
       id AS firma_id,
       alumno_id,
       periodo,
-      comentario,
       fecha_firma
     FROM firmas_boleta
     WHERE tutor_id = $1 AND alumno_id = $2
@@ -102,22 +101,19 @@ export async function upsertReportCardSignature(
   tutorId: number,
   studentId: number,
   periodo: string,
-  comentario: string | null,
 ): Promise<SignatureRow> {
   const rows = await query(
-    `INSERT INTO firmas_boleta (tutor_id, alumno_id, periodo, comentario)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO firmas_boleta (tutor_id, alumno_id, periodo)
+     VALUES ($1, $2, $3)
      ON CONFLICT (tutor_id, alumno_id, periodo)
      DO UPDATE SET
-       comentario = EXCLUDED.comentario,
        fecha_firma = CURRENT_TIMESTAMP
      RETURNING
        id AS firma_id,
        alumno_id,
        periodo,
-       comentario,
        fecha_firma`,
-    [tutorId, studentId, periodo, comentario],
+    [tutorId, studentId, periodo],
   );
   return rows[0] as SignatureRow;
 }

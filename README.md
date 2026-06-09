@@ -757,21 +757,18 @@ Authorization: Bearer <token>
         "periodo": "primer trimestre",
         "firmada": true,
         "firma_id": 1,
-        "comentario": "Enterado, gracias.",
         "fecha_firma": "2026-06-03T15:00:00.000Z"
       },
       {
         "periodo": "segundo trimestre",
         "firmada": false,
         "firma_id": null,
-        "comentario": null,
         "fecha_firma": null
       },
       {
         "periodo": "tercer trimestre",
         "firmada": false,
         "firma_id": null,
-        "comentario": null,
         "fecha_firma": null
       }
     ]
@@ -787,7 +784,7 @@ Authorization: Bearer <token>
 - Subjects are sorted by subject name, then teacher name
 - Groups with no assignments return `boleta: []`
 - Always includes a `firmas` array with all 3 trimester slots in fixed order
-- Signed trimesters show `firmada: true` with populated `firma_id`, `comentario`, `fecha_firma`
+- Signed trimesters show `firmada: true` with populated `firma_id`, `fecha_firma`
 - Unsigned trimesters show `firmada: false` with null values
 - Only the authenticated tutor's signatures are included
 
@@ -811,27 +808,20 @@ Content-Type: application/json
 **Body:**
 
 ```json
-{
-  "comentario": "Enterado, gracias."
-}
+{}
 ```
 
-The body may also be `{}` or `{ "comentario": null }`.
-
-**Validation:**
-
-| Field | Rule |
-|---|---|
-| `comentario` | Optional, nullable, string when present, trimmed, max 500 characters |
+Only an empty object `{}` is accepted. Any unexpected field is rejected.
 
 **Behavior:**
 - One signature per tutor + student + trimester
 - Uses PostgreSQL upsert (`ON CONFLICT ... DO UPDATE`)
-- Signing again updates the comment and `fecha_firma`
+- The backend stores confirmation metadata only (`tutor_id`, `alumno_id`, `periodo`, `fecha_firma`)
+- Signing again updates `fecha_firma` (idempotent)
 - Requires at least one grade to exist for the selected trimester
 - Cannot sign an empty trimester (returns `400 Bad Request`)
 
-**Success response (200):**
+ **Success response (200):**
 ```json
 {
   "status": "success",
@@ -841,7 +831,6 @@ The body may also be `{}` or `{ "comentario": null }`.
       "firma_id": 1,
       "alumno_id": 5,
       "periodo": "primer trimestre",
-      "comentario": "Enterado, gracias.",
       "fecha_firma": "2026-06-03T15:00:00.000Z"
     }
   }
@@ -856,7 +845,7 @@ The body may also be `{}` or `{ "comentario": null }`.
 | No grades for the selected trimester | 400 Report card has no grades for this period |
 | Invalid `alumno_id` | 400 Validation failed |
 | Invalid `periodo` | 400 Validation failed |
-| Comment over 500 chars | 400 Validation failed |
+| Unexpected body field | 400 Validation failed |
 | `docente` or `admin` | 403 Forbidden |
 | Missing/invalid JWT | 401 Unauthorized |
 

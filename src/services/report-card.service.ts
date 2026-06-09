@@ -55,7 +55,6 @@ function buildFirmaSlots(signatures: SignatureRow[]): ReportCardFirmaSlot[] {
       periodo,
       firmada: sig !== undefined,
       firma_id: sig ? sig.firma_id : null,
-      comentario: sig ? sig.comentario : null,
       fecha_firma: sig ? sig.fecha_firma : null,
     };
   });
@@ -118,7 +117,6 @@ export async function signReportCard(
   tutorId: number,
   studentId: number,
   periodo: string,
-  comentario?: string | null,
 ): Promise<{ message: string; firma: SignatureRow }> {
   const child = await findChildByTutorAndStudentId(tutorId, studentId);
   if (!child) {
@@ -130,13 +128,10 @@ export async function signReportCard(
     throw new AppError('Report card has no grades for this period', HTTP_STATUS.BAD_REQUEST);
   }
 
-  const normalizedComentario = comentario === undefined ? null : comentario;
-
   const firma = await upsertReportCardSignature(
     tutorId,
     studentId,
     periodo,
-    normalizedComentario,
   );
 
   return {

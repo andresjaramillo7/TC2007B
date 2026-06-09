@@ -1,0 +1,1648 @@
+openapi: "3.0.3"
+info:
+  title: Grade Tracker API
+  description: |
+    Backend API for the Grade Tracker platform.
+
+    Supports three roles:
+    - **tutor** — mobile app for parents/tutors (view children's grades, sign report cards, chat with teachers, view announcements)
+    - **docente** — web platform for teachers (manage grades, publish announcements, chat with tutors)
+    - **admin** — administrative override for most web endpoints (inspect data, manage announcements)
+  version: 1.0.0
+  contact:
+    name: Grade Tracker Team
+
+servers:
+  - url: http://localhost:3000
+    description: Development server
+
+paths:
+  /api/auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Login
+      description: Authenticate with email and password to receive a JWT.
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            example:
+              email: teacher@example.com
+              password: password123
+      responses:
+        "200":
+          description: Successful authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          description: Invalid email format or missing fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+        "401":
+          description: Invalid email or password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+
+  /api/auth/me:
+    get:
+      tags:
+        - Authentication
+      summary: Current authenticated user
+      description: Returns the authenticated user's profile. Requires a valid Bearer token.
+      operationId: getMe
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Authenticated user profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: "#/components/schemas/User"
+        "401":
+          description: Missing, invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+
+  /api/movil/tutor/hijos:
+    get:
+      tags:
+        - Mobile Tutor — Children and Report Cards
+      summary: Linked children
+      description: |
+        Returns all students linked to the authenticated tutor through `tutor_alumno`.
+        **Roles allowed:** `tutor` only (`docente` and `admin` get 403).
+      operationId: getChildren
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of linked children
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Child"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/movil/tutor/hijos/{alumno_id}/calificaciones:
+    get:
+      tags:
+        - Mobile Tutor — Children and Report Cards
+      summary: Consolidated report card
+      description: |
+        Returns the full consolidated report card for one linked child, grouped by subject assignment.
+        All three trimester slots are always present. Missing trimesters return null values.
+        **Roles allowed:** `tutor` only.
+      operationId: getReportCard
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: alumno_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Positive student ID
+      responses:
+        "200":
+          description: Consolidated report card
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    $ref: "#/components/schemas/ReportCard"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Student not found or not linked to tutor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+
+  /api/movil/tutor/hijos/{alumno_id}/calificaciones/pdf:
+    get:
+      tags:
+        - Mobile Tutor — Children and Report Cards
+      summary: Download report card PDF
+      description: |
+        Generates and downloads a dynamic PDF of the consolidated report card.
+        PDF is generated in memory — no files stored on disk.
+        **Roles allowed:** `tutor` only.
+      operationId: downloadReportCardPdf
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: alumno_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Positive student ID
+      responses:
+        "200":
+          description: PDF binary
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Student not found or not linked to tutor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+
+  /api/movil/tutor/hijos/{alumno_id}/boletas/{periodo}/firma:
+    post:
+      tags:
+        - Mobile Tutor — Children and Report Cards
+      summary: Sign trimester report card
+      description: |
+        Allows a tutor to acknowledge (sign) a linked student's report card for one trimester.
+        Uses PostgreSQL upsert — signing again updates fecha_firma (idempotent).
+        Requires at least one grade to exist for the selected trimester.
+        Body must be empty object {}. Any unexpected field is rejected.
+        **Roles allowed:** `tutor` only.
+      operationId: signReportCard
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: alumno_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Positive student ID
+        - name: periodo
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Periodo"
+          description: Trimester to sign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+            example: {}
+      responses:
+        "200":
+          description: Report card signed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignatureResponse"
+        "400":
+          description: |
+            Invalid alumno_id or periodo, unexpected body field, or no grades for the trimester
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Student not found or not linked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+
+  /api/movil/tutor/avisos:
+    get:
+      tags:
+        - Mobile Tutor — Announcements
+      summary: Tutor announcement feed
+      description: |
+        Returns announcements for groups linked to the authenticated tutor's children.
+        Announcements are never duplicated, even if multiple children belong to the same group.
+        Newest-first sorting.
+        **Roles allowed:** `tutor` only.
+      operationId: getMobileAnnouncements
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Announcement list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Announcement"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/movil/tutor/chats:
+    get:
+      tags:
+        - Mobile Tutor — Messaging
+      summary: Tutor chat inbox
+      description: |
+        Returns the authenticated tutor's chat conversations with subject context.
+        Only chats where the tutor participates. Sorted by most recent activity first.
+        **Roles allowed:** `tutor` only.
+      operationId: getMobileChats
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Chat inbox
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MobileChatEntry"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    post:
+      tags:
+        - Mobile Tutor — Messaging
+      summary: Start or reuse subject-specific chat
+      description: |
+        Starts a new conversation from a linked child's subject assignment, or reuses an existing one.
+        chat_creado: true for new chat, false for reused. Always returns 201.
+        **Roles allowed:** `tutor` only.
+      operationId: startMobileChat
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartChatRequest"
+            example:
+              alumno_id: 5
+              asignacion_id: 12
+              contenido: "Buenas tardes, quisiera hacer una consulta sobre la materia."
+      responses:
+        "201":
+          description: Chat started or reused
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    $ref: "#/components/schemas/StartChatResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Student not found or assignment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+
+  /api/movil/tutor/chats/{chat_id}/mensajes:
+    get:
+      tags:
+        - Mobile Tutor — Messaging
+      summary: Read chat messages (tutor)
+      description: |
+        Returns paginated messages from an authorized chat.
+        Tutor must be a participant. After authorization, incoming unread messages are marked as read.
+        **Roles allowed:** `tutor` only.
+      operationId: getMobileChatMessages
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: chat_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Positive chat ID
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Message"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Chat not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+
+    post:
+      tags:
+        - Mobile Tutor — Messaging
+      summary: Send message (tutor)
+      description: |
+        Sends a new message in an existing authorized chat.
+        Tutor must be a participant. New messages inserted with leido = false.
+        **Roles allowed:** `tutor` only.
+      operationId: sendMobileChatMessage
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: chat_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Positive chat ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageRequest"
+            example:
+              contenido: "Enterado, gracias."
+      responses:
+        "201":
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    $ref: "#/components/schemas/Message"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Chat not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+
+  /api/web/docente/asignaciones:
+    get:
+      tags:
+        - Web Teacher — Academic Data
+      summary: Teacher assignments
+      description: |
+        Lists subjects and groups linked to the authenticated teacher.
+        docente — returns only own assignments. admin — returns all assignments.
+        **Roles allowed:** docente, admin.
+      operationId: getAssignments
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Assignment list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Assignment"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/web/docente/grupos/{grupo_id}/alumnos:
+    get:
+      tags:
+        - Web Teacher — Academic Data
+      summary: Students by authorized group
+      description: |
+        Lists students enrolled in a group the teacher is authorized to access.
+        docente — must have at least one assignment in the group. admin — may list any group.
+        **Roles allowed:** docente, admin.
+      operationId: getStudentsByGroup
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: grupo_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Positive group ID
+      responses:
+        "200":
+          description: Student list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Student"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Group not found or unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+
+  /api/web/docente/alumnos/{alumno_id}/calificaciones:
+    get:
+      tags:
+        - Web Teacher — Grades
+      summary: Student grade history
+      description: |
+        Returns grades visible to the authenticated user for a specific student.
+        docente — returns only grades linked to the teacher's own assignments.
+        admin — returns all grades for the student.
+        **Roles allowed:** docente, admin.
+      operationId: getStudentGrades
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: alumno_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Positive student ID
+      responses:
+        "200":
+          description: Grade history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/GradeRow"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Student not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+
+  /api/web/docente/asignaciones/{asignacion_id}/calificaciones:
+    get:
+      tags:
+        - Web Teacher — Grades
+      summary: Assignment grade table by trimester
+      description: |
+        Returns all students in the assignment group, including those without a recorded grade.
+        docente — must own the assignment. admin — may access any existing assignment.
+        **Roles allowed:** docente, admin.
+      operationId: getAssignmentGrades
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: asignacion_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Positive assignment ID
+        - name: periodo
+          in: query
+          required: true
+          schema:
+            $ref: "#/components/schemas/Periodo"
+          description: Trimester filter
+      responses:
+        "200":
+          description: Grade table (students with optional grade)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/GradeTableEntry"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Assignment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+
+  /api/web/docente/calificaciones:
+    post:
+      tags:
+        - Web Teacher — Grades
+      summary: Individual grade upsert
+      description: |
+        Create or update a grade for one student.
+        Uses PostgreSQL upsert: INSERT if no grade exists, UPDATE if it does.
+        **Roles allowed:** docente, admin.
+      operationId: upsertGrade
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertGradeRequest"
+            example:
+              alumno_id: 5
+              asignacion_id: 12
+              periodo: "primer trimestre"
+              nota: 8.5
+              comentario: "Buen trabajo"
+      responses:
+        "200":
+          description: Grade upserted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Calificación registrada con éxito"
+                      calificacion_id:
+                        type: integer
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Assignment or student not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+
+  /api/web/docente/calificaciones/bulk:
+    post:
+      tags:
+        - Web Teacher — Grades
+      summary: Bulk grade upsert
+      description: |
+        Create or update grades for multiple students in the same assignment and trimester.
+        1 to 100 records per request. No duplicate alumno_id values allowed.
+        Entire operation runs in a single PostgreSQL transaction.
+        **Roles allowed:** docente, admin.
+      operationId: upsertBulkGrades
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkGradeRequest"
+            example:
+              asignacion_id: 12
+              periodo: "primer trimestre"
+              calificaciones:
+                - alumno_id: 5
+                  nota: 8.5
+                  comentario: "Buen trabajo"
+                - alumno_id: 6
+                  nota: 9.2
+                  comentario: null
+      responses:
+        "200":
+          description: Grades upserted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Calificaciones registradas con éxito"
+                      actualizadas:
+                        type: integer
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Assignment not found or student not in group
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+
+  /api/web/docente/avisos:
+    get:
+      tags:
+        - Web Teacher — Announcements
+      summary: List announcements
+      description: |
+        Returns announcements visible to the authenticated user.
+        docente — returns only own announcements. admin — returns all.
+        **Roles allowed:** docente, admin.
+      operationId: getAnnouncements
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Announcement list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Announcement"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    post:
+      tags:
+        - Web Teacher — Announcements
+      summary: Publish announcement
+      description: |
+        Publishes a new announcement for an authorized group.
+        docente — must have at least one assignment in the target group.
+        admin — may publish to any existing group.
+        **Roles allowed:** docente, admin.
+      operationId: publishAnnouncement
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublishAnnouncementRequest"
+            example:
+              grupo_id: 1
+              titulo: "Material para mañana"
+              contenido: "Traer geometría y regla."
+      responses:
+        "201":
+          description: Announcement published
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Aviso publicado"
+                      aviso_id:
+                        type: integer
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Group not found or teacher not authorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+
+  /api/web/docente/chats:
+    get:
+      tags:
+        - Web Teacher — Messaging
+      summary: Teacher chat inbox
+      description: |
+        Returns the authenticated teacher's chat conversations.
+        docente — returns only chats where the teacher is a participant.
+        admin — returns all chats (administrative override).
+        **Roles allowed:** docente, admin.
+      operationId: getChats
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Chat inbox
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TeacherChatEntry"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/web/docente/chats/{chat_id}/mensajes:
+    get:
+      tags:
+        - Web Teacher — Messaging
+      summary: Read chat messages (teacher)
+      description: |
+        Returns paginated messages from an authorized chat.
+        docente — must be a participant. admin — may read any chat.
+        Messages ordered newest-first. Unread messages marked as read for docente.
+        **Roles allowed:** docente, admin.
+      operationId: getChatMessages
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: chat_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Positive chat ID
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Message"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Chat not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+
+    post:
+      tags:
+        - Web Teacher — Messaging
+      summary: Send message (teacher)
+      description: |
+        Sends a new message inside an authorized chat.
+        docente — must be a participant. admin — may send to any existing chat.
+        New messages inserted with leido = false.
+        **Roles allowed:** docente, admin.
+      operationId: sendChatMessage
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: chat_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Positive chat ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageRequest"
+            example:
+              contenido: "Le comento que Mateo ha mostrado un excelente avance."
+      responses:
+        "201":
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    $ref: "#/components/schemas/Message"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Chat not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Enter your JWT token in the format `Bearer <token>`.
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      description: Page number (positive integer)
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    Limit:
+      name: limit
+      in: query
+      description: Messages per page (max 100)
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  responses:
+    BadRequest:
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiErrorResponse"
+    Unauthorized:
+      description: Missing, invalid or expired token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiErrorResponse"
+    Forbidden:
+      description: Insufficient role permissions
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiErrorResponse"
+
+  schemas:
+    Periodo:
+      type: string
+      enum:
+        - "primer trimestre"
+        - "segundo trimestre"
+        - "tercer trimestre"
+      description: Academic trimester
+
+    Role:
+      type: string
+      enum:
+        - docente
+        - tutor
+        - admin
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+          format: email
+        nombre:
+          type: string
+        apellido:
+          type: string
+        rol:
+          $ref: "#/components/schemas/Role"
+        foto_url:
+          type: string
+          nullable: true
+      required:
+        - id
+        - email
+        - nombre
+        - apellido
+        - rol
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: User email
+        password:
+          type: string
+          minLength: 6
+          description: User password
+
+    LoginResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            token:
+              type: string
+              description: JWT token
+            user:
+              $ref: "#/components/schemas/User"
+
+    ApiSuccessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        data: {}
+
+    ApiErrorResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: fail
+        message:
+          type: string
+        errors:
+          type: array
+          items: {}
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        total_pages:
+          type: integer
+
+    ChildGroup:
+      type: object
+      properties:
+        grupo_id:
+          type: integer
+        nombre:
+          type: string
+        grado:
+          type: integer
+        grupo_letra:
+          type: string
+        ciclo_escolar:
+          type: string
+
+    Child:
+      type: object
+      properties:
+        alumno_id:
+          type: integer
+        nombre:
+          type: string
+        apellido:
+          type: string
+        nombre_completo:
+          type: string
+        grupo:
+          $ref: "#/components/schemas/ChildGroup"
+        foto_url:
+          type: string
+          nullable: true
+        parentesco:
+          type: string
+
+    ReportCardGrade:
+      type: object
+      properties:
+        periodo:
+          $ref: "#/components/schemas/Periodo"
+        nota:
+          type: number
+          format: float
+          nullable: true
+        comentario:
+          type: string
+          nullable: true
+        fecha_registro:
+          type: string
+          format: date-time
+          nullable: true
+
+    ReportCardSubject:
+      type: object
+      properties:
+        materia_id:
+          type: integer
+        nombre:
+          type: string
+
+    ReportCardTeacher:
+      type: object
+      properties:
+        docente_id:
+          type: integer
+        nombre:
+          type: string
+        apellido:
+          type: string
+
+    ReportCardSubjectEntry:
+      type: object
+      properties:
+        asignacion_id:
+          type: integer
+        materia:
+          $ref: "#/components/schemas/ReportCardSubject"
+        docente:
+          $ref: "#/components/schemas/ReportCardTeacher"
+        calificaciones:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReportCardGrade"
+
+    ReportCardFirmaSlot:
+      type: object
+      properties:
+        periodo:
+          $ref: "#/components/schemas/Periodo"
+        firmada:
+          type: boolean
+        firma_id:
+          type: integer
+          nullable: true
+        fecha_firma:
+          type: string
+          format: date-time
+          nullable: true
+
+    ReportCard:
+      type: object
+      properties:
+        alumno:
+          $ref: "#/components/schemas/Child"
+        boleta:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReportCardSubjectEntry"
+        firmas:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReportCardFirmaSlot"
+
+    ReportCardSignature:
+      type: object
+      properties:
+        firma_id:
+          type: integer
+        alumno_id:
+          type: integer
+        periodo:
+          $ref: "#/components/schemas/Periodo"
+        fecha_firma:
+          type: string
+          format: date-time
+
+    SignatureResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "Boleta firmada con éxito"
+            firma:
+              $ref: "#/components/schemas/ReportCardSignature"
+
+    AnnouncementGroup:
+      type: object
+      properties:
+        grupo_id:
+          type: integer
+        nombre:
+          type: string
+
+    AnnouncementAuthor:
+      type: object
+      properties:
+        usuario_id:
+          type: integer
+        nombre:
+          type: string
+        apellido:
+          type: string
+        rol:
+          $ref: "#/components/schemas/Role"
+
+    Announcement:
+      type: object
+      properties:
+        aviso_id:
+          type: integer
+        grupo:
+          $ref: "#/components/schemas/AnnouncementGroup"
+        autor:
+          $ref: "#/components/schemas/AnnouncementAuthor"
+        titulo:
+          type: string
+        contenido:
+          type: string
+        fecha_publicacion:
+          type: string
+          format: date-time
+
+    PublishAnnouncementRequest:
+      type: object
+      required:
+        - grupo_id
+        - titulo
+        - contenido
+      properties:
+        grupo_id:
+          type: integer
+          minimum: 1
+        titulo:
+          type: string
+          minLength: 1
+          maxLength: 150
+        contenido:
+          type: string
+          minLength: 1
+          maxLength: 3000
+
+    GroupInfo:
+      type: object
+      properties:
+        grupo_id:
+          type: integer
+        nombre:
+          type: string
+        grado:
+          type: integer
+        grupo_letra:
+          type: string
+        ciclo_escolar:
+          type: string
+
+    SubjectInfo:
+      type: object
+      properties:
+        materia_id:
+          type: integer
+        nombre:
+          type: string
+
+    Assignment:
+      type: object
+      properties:
+        asignacion_id:
+          type: integer
+        grupo:
+          $ref: "#/components/schemas/GroupInfo"
+        materia:
+          $ref: "#/components/schemas/SubjectInfo"
+
+    Student:
+      type: object
+      properties:
+        alumno_id:
+          type: integer
+        nombre:
+          type: string
+        apellido:
+          type: string
+        foto_url:
+          type: string
+          nullable: true
+
+    GradeRow:
+      type: object
+      properties:
+        calificacion_id:
+          type: integer
+        asignacion_id:
+          type: integer
+        materia:
+          type: string
+        periodo:
+          $ref: "#/components/schemas/Periodo"
+        nota:
+          type: number
+          format: float
+        comentario:
+          type: string
+          nullable: true
+        fecha_registro:
+          type: string
+          format: date-time
+
+    GradeTableEntry:
+      type: object
+      properties:
+        alumno:
+          $ref: "#/components/schemas/Student"
+        calificacion:
+          type: object
+          nullable: true
+          properties:
+            calificacion_id:
+              type: integer
+            nota:
+              type: number
+              format: float
+            comentario:
+              type: string
+              nullable: true
+            fecha_registro:
+              type: string
+              format: date-time
+
+    UpsertGradeRequest:
+      type: object
+      required:
+        - alumno_id
+        - asignacion_id
+        - periodo
+        - nota
+      properties:
+        alumno_id:
+          type: integer
+          minimum: 1
+        asignacion_id:
+          type: integer
+          minimum: 1
+        periodo:
+          $ref: "#/components/schemas/Periodo"
+        nota:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 10
+        comentario:
+          type: string
+          maxLength: 500
+          nullable: true
+
+    BulkGradeItem:
+      type: object
+      required:
+        - alumno_id
+        - nota
+      properties:
+        alumno_id:
+          type: integer
+          minimum: 1
+        nota:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 10
+        comentario:
+          type: string
+          maxLength: 500
+          nullable: true
+
+    BulkGradeRequest:
+      type: object
+      required:
+        - asignacion_id
+        - periodo
+        - calificaciones
+      properties:
+        asignacion_id:
+          type: integer
+          minimum: 1
+        periodo:
+          $ref: "#/components/schemas/Periodo"
+        calificaciones:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/BulkGradeItem"
+
+    Message:
+      type: object
+      properties:
+        mensaje_id:
+          type: integer
+        remitente_id:
+          type: integer
+        contenido:
+          type: string
+        leido:
+          type: boolean
+        fecha_envio:
+          type: string
+          format: date-time
+
+    SendMessageRequest:
+      type: object
+      required:
+        - contenido
+      properties:
+        contenido:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: Message text (trimmed)
+
+    MobileChatAlumno:
+      type: object
+      properties:
+        alumno_id:
+          type: integer
+        nombre:
+          type: string
+        apellido:
+          type: string
+
+    MobileChatDocente:
+      type: object
+      properties:
+        docente_id:
+          type: integer
+        nombre:
+          type: string
+        apellido:
+          type: string
+
+    MobileChatMateria:
+      type: object
+      properties:
+        materia_id:
+          type: integer
+        nombre:
+          type: string
+
+    MobileChatEntry:
+      type: object
+      properties:
+        chat_id:
+          type: integer
+        asignacion_id:
+          type: integer
+        alumno:
+          $ref: "#/components/schemas/MobileChatAlumno"
+        docente:
+          $ref: "#/components/schemas/MobileChatDocente"
+        materia:
+          $ref: "#/components/schemas/MobileChatMateria"
+        ultimo_mensaje:
+          type: string
+          nullable: true
+        ultima_fecha:
+          type: string
+          format: date-time
+          nullable: true
+        no_leidos:
+          type: integer
+
+    StartChatRequest:
+      type: object
+      required:
+        - alumno_id
+        - asignacion_id
+        - contenido
+      properties:
+        alumno_id:
+          type: integer
+          minimum: 1
+        asignacion_id:
+          type: integer
+          minimum: 1
+        contenido:
+          type: string
+          minLength: 1
+          maxLength: 2000
+
+    StartChatResult:
+      type: object
+      properties:
+        chat_id:
+          type: integer
+        mensaje_id:
+          type: integer
+        chat_creado:
+          type: boolean
+
+    TeacherChatTutor:
+      type: object
+      properties:
+        tutor_id:
+          type: integer
+        nombre:
+          type: string
+        apellido:
+          type: string
+
+    TeacherChatAlumno:
+      type: object
+      properties:
+        alumno_id:
+          type: integer
+        nombre:
+          type: string
+        apellido:
+          type: string
+
+    TeacherChatEntry:
+      type: object
+      properties:
+        chat_id:
+          type: integer
+        tutor:
+          $ref: "#/components/schemas/TeacherChatTutor"
+        alumno:
+          $ref: "#/components/schemas/TeacherChatAlumno"
+        ultimo_mensaje:
+          type: string
+          nullable: true
+        ultima_fecha:
+          type: string
+          format: date-time
+          nullable: true
+        no_leidos:
+          type: integer

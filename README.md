@@ -20,17 +20,17 @@ Backend API for the Grade Tracker platform — a school grade management system 
 
 ## Tech Stack
 
-| Category | Technology |
-|---|---|
-| Runtime | Bun 1.x |
-| Language | TypeScript (strict) |
-| Framework | Express 5 |
-| Database | PostgreSQL (via `pg`) |
-| Validation | Zod |
-| Authentication | JWT + bcryptjs |
-| PDF | pdfkit |
-| Testing | Jest + Supertest |
-| API Docs | OpenAPI 3.0 + Swagger UI |
+| Category       | Technology               |
+| -------------- | ------------------------ |
+| Runtime        | Bun 1.x                  |
+| Language       | TypeScript (strict)      |
+| Framework      | Express 5                |
+| Database       | PostgreSQL (via `pg`)    |
+| Validation     | Zod                      |
+| Authentication | JWT + bcryptjs           |
+| PDF            | pdfkit                   |
+| Testing        | Jest + Supertest         |
+| API Docs       | OpenAPI 3.0 + Swagger UI |
 
 ## Requirements
 
@@ -60,46 +60,50 @@ bun run seed:grades
 bun run seed:messaging
 bun run seed:announcements
 
-# 5. Start development server
+# 5. Generate local TLS certificate (first time only)
+bun run cert
+
+# 6. Start development server
 bun run dev
 ```
 
-The server starts at `http://localhost:3000`. When HTTPS is enabled, it starts at `https://localhost:3443`.
+The server starts at `https://localhost:3443`.
 
 ## Available Scripts
 
-| Script | Description |
-|---|---|
-| `bun run dev` | Start dev server with hot reload |
-| `bun run build` | Compile TypeScript to `dist/` |
-| `bun run start` | Run compiled app from `dist/` |
-| `bun run seed` | Insert test users |
-| `bun run seed:academic` | Insert groups, subjects, assignments, students |
-| `bun run seed:grades` | Insert sample grades |
-| `bun run seed:messaging` | Insert chats, participants, messages |
-| `bun run seed:announcements` | Insert group announcements |
-| `bun run test` | Run test suite (Jest) |
-| `bun run lint` | Run ESLint |
-| `bun run format` | Format code with Prettier |
+| Script                       | Description                                    |
+| ---------------------------- | ---------------------------------------------- |
+| `bun run cert`               | Generate local TLS certificate                 |
+| `bun run dev`                | Start HTTPS development server with hot reload |
+| `bun run tls`                | Verify TLS protocol restrictions               |
+| `bun run build`              | Compile TypeScript to `dist/`                  |
+| `bun run start`              | Run compiled app from `dist/`                  |
+| `bun run seed`               | Insert test users                              |
+| `bun run seed:academic`      | Insert groups, subjects, assignments, students |
+| `bun run seed:grades`        | Insert sample grades                           |
+| `bun run seed:messaging`     | Insert chats, participants, messages           |
+| `bun run seed:announcements` | Insert group announcements                     |
+| `bun run test`               | Run test suite (Jest)                          |
+| `bun run lint`               | Run ESLint                                     |
+| `bun run format`             | Format code with Prettier                      |
 
 ## Environment Variables
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `PORT` | No | 3000 | Server port |
-| `NODE_ENV` | No | development | Environment (`development`, `production`, `test`) |
-| `DB_HOST` | No | localhost | PostgreSQL host |
-| `DB_PORT` | No | 5432 | PostgreSQL port |
-| `DB_USER` | Yes | — | PostgreSQL user |
-| `DB_PASSWORD` | No | '' | PostgreSQL password |
-| `DB_NAME` | Yes | — | PostgreSQL database name |
-| `JWT_SECRET` | No | dev-secret | JWT signing key |
-| `JWT_EXPIRES_IN` | No | 8h | JWT expiration duration |
-| `CORS_ORIGIN` | No | * | Allowed CORS origin |
-| `HTTPS_ENABLED` | No | false | Enable HTTPS (true/false) |
-| `HTTPS_PORT` | No | 3443 | HTTPS server port |
-| `TLS_KEY_PATH` | No | .local-certs/localhost-key.pem | TLS private key path |
-| `TLS_CERT_PATH` | No | .local-certs/localhost-cert.pem | TLS certificate path |
+| Variable         | Required | Default                         | Description                                       |
+| ---------------- | -------- | ------------------------------- | ------------------------------------------------- |
+| `PORT`           | No       | 3000                            | Server port                                       |
+| `NODE_ENV`       | No       | development                     | Environment (`development`, `production`, `test`) |
+| `DB_HOST`        | No       | localhost                       | PostgreSQL host                                   |
+| `DB_PORT`        | No       | 5432                            | PostgreSQL port                                   |
+| `DB_USER`        | Yes      | —                               | PostgreSQL user                                   |
+| `DB_PASSWORD`    | No       | ''                              | PostgreSQL password                               |
+| `DB_NAME`        | Yes      | —                               | PostgreSQL database name                          |
+| `JWT_SECRET`     | No       | dev-secret                      | JWT signing key                                   |
+| `JWT_EXPIRES_IN` | No       | 8h                              | JWT expiration duration                           |
+| `CORS_ORIGIN`    | No       | \*                              | Allowed CORS origin                               |
+| `HTTPS_PORT`     | No       | 3443                            | HTTPS server port                                 |
+| `TLS_KEY_PATH`   | No       | .local-certs/localhost-key.pem  | TLS private key path                              |
+| `TLS_CERT_PATH`  | No       | .local-certs/localhost-cert.pem | TLS certificate path                              |
 
 ## Database Setup
 
@@ -113,23 +117,21 @@ Two approaches:
 Interactive Swagger UI is available at:
 
 ```
-http://localhost:3000/api/docs
+https://localhost:3443/api/docs
 ```
-
-When HTTPS is enabled, Swagger is also available at `https://localhost:3443/api/docs`.
 
 The OpenAPI specification documents all 22 endpoints with request bodies, response shapes, status codes, authentication, and role requirements. This is the single source of truth for the API contract.
 
-Raw OpenAPI JSON is also available at `http://localhost:3000/api/docs.json`.
+Raw OpenAPI JSON is also available at `https://localhost:3443/api/docs.json`.
 
 ### Seed Users
 
-| Email | Password | Name | Role |
-|---|---|---|---|---|
-| `teacher@example.com` | `Demo_Teacher1!` | Ana López | docente |
-| `teacher2@example.com` | `Demo_Teacher2!` | Pedro Ruiz | docente |
-| `tutor@example.com` | `Demo_Tutor123!` | Carlos García | tutor |
-| `admin@example.com` | `Demo_Admin123!` | María Administrador | admin |
+| Email                  | Password         | Name                | Role    |
+| ---------------------- | ---------------- | ------------------- | ------- |
+| `teacher@example.com`  | `Demo_Teacher1!` | Ana López           | docente |
+| `teacher2@example.com` | `Demo_Teacher2!` | Pedro Ruiz          | docente |
+| `tutor@example.com`    | `Demo_Tutor123!` | Carlos García       | tutor   |
+| `admin@example.com`    | `Demo_Admin123!` | María Administrador | admin   |
 
 All seed scripts are idempotent — safe to run multiple times.
 
@@ -141,17 +143,20 @@ bun run test
 
 Latest validated run: **293 passed, 0 failed** (11 suites).
 
-## HTTPS (Optional)
+## HTTPS Local Development
 
-Generate a self-signed certificate and start with HTTPS:
+The backend always runs through HTTPS. The primary workflow is:
 
 ```bash
-./scripts/generate-local-cert.sh
+bun run cert    # generate local TLS certificate (first time only)
+bun run dev     # start HTTPS development server
+bun run tls     # verify TLS 1.2/1.3 work and TLS 1.1 is rejected
 ```
 
-Then set `HTTPS_ENABLED=true` in `.env` and restart.
-
 The server listens on `https://localhost:3443` with TLS 1.2 minimum and TLS 1.3 maximum.
+
+> The self-signed certificate may trigger a browser warning in local development.
+> Generated certificate files under `.local-certs/` must never be committed.
 
 ## Security
 

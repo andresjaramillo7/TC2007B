@@ -6,17 +6,17 @@ Confidentiality, integrity, availability, and authenticity of academic grade dat
 
 ## Implemented Application Controls
 
-| Control | Status | Evidence |
-|---|---|---|
-| Password hashing | bcryptjs, 10 salt rounds | `src/scripts/seedUsers.ts:16` |
-| Strong seed-password policy | Min 12 chars, uppercase, lowercase, number, symbol | `src/utils/validatePasswordPolicy.ts` |
-| JWT authentication | Bearer token, configurable expiry | `src/middlewares/authenticate.ts` |
-| Role-based authorization | docente, tutor, admin | `src/middlewares/authorizeRoles.ts` |
-| Tutor-to-child access control | `WHERE ta.tutor_id = $1` | `src/models/children.model.ts:22-23` |
-| Teacher assignment authorization | `WHERE id = $1 AND docente_id = $2` | `src/models/grades.model.ts:33-35` |
-| Parameterized SQL | All queries use `$1`, `$2` placeholders | e.g., `src/models/user.model.ts:15`, `src/models/grades.model.ts:34` |
-| Audit logging | Non-blocking insert of key events | `src/models/audit-log.model.ts` |
-| Direct HTTPS | Optional, TLS 1.2/1.3 | `src/server.ts` |
+| Control                          | Status                                             | Evidence                                                             |
+| -------------------------------- | -------------------------------------------------- | -------------------------------------------------------------------- |
+| Password hashing                 | bcryptjs, 10 salt rounds                           | `src/scripts/seedUsers.ts:16`                                        |
+| Strong seed-password policy      | Min 12 chars, uppercase, lowercase, number, symbol | `src/utils/validatePasswordPolicy.ts`                                |
+| JWT authentication               | Bearer token, configurable expiry                  | `src/middlewares/authenticate.ts`                                    |
+| Role-based authorization         | docente, tutor, admin                              | `src/middlewares/authorizeRoles.ts`                                  |
+| Tutor-to-child access control    | `WHERE ta.tutor_id = $1`                           | `src/models/children.model.ts:22-23`                                 |
+| Teacher assignment authorization | `WHERE id = $1 AND docente_id = $2`                | `src/models/grades.model.ts:33-35`                                   |
+| Parameterized SQL                | All queries use `$1`, `$2` placeholders            | e.g., `src/models/user.model.ts:15`, `src/models/grades.model.ts:34` |
+| Audit logging                    | Non-blocking insert of key events                  | `src/models/audit-log.model.ts`                                      |
+| Direct HTTPS                     | Required, TLS 1.2/1.3                              | `src/server.ts`                                                      |
 
 ## Password Hashing
 
@@ -26,12 +26,12 @@ bcryptjs with 10 salt rounds. Password hash is excluded from all API responses v
 
 Demo credentials in `src/scripts/seedUsers.ts`:
 
-| Email | Password |
-|---|---|
-| `teacher@example.com` | `Demo_Teacher1!` |
+| Email                  | Password         |
+| ---------------------- | ---------------- |
+| `teacher@example.com`  | `Demo_Teacher1!` |
 | `teacher2@example.com` | `Demo_Teacher2!` |
-| `tutor@example.com` | `Demo_Tutor123!` |
-| `admin@example.com` | `Demo_Admin123!` |
+| `tutor@example.com`    | `Demo_Tutor123!` |
+| `admin@example.com`    | `Demo_Admin123!` |
 
 Policy: minimum 12 characters, at least one uppercase, one lowercase, one number, one symbol.
 
@@ -55,37 +55,37 @@ Representative safe queries:
 
 ## Audit-Log Events
 
-| Event | Trigger | Logged Details |
-|---|---|---|
-| `LOGIN_SUCCESS` | Successful authentication | User ID |
-| `LOGIN_FAILED` | Failed authentication attempt | Email (never password) |
-| `GRADE_UPSERT` | Single grade saved | alumno_id, asignacion_id, periodo |
-| `GRADE_BULK_UPSERT` | Bulk grade save | asignacion_id, periodo, count |
-| `REPORT_CARD_SIGNED` | Report card signature | alumno_id, periodo |
-| `ANNOUNCEMENT_CREATED` | New announcement | grupo_id |
+| Event                  | Trigger                       | Logged Details                    |
+| ---------------------- | ----------------------------- | --------------------------------- |
+| `LOGIN_SUCCESS`        | Successful authentication     | User ID                           |
+| `LOGIN_FAILED`         | Failed authentication attempt | Email (never password)            |
+| `GRADE_UPSERT`         | Single grade saved            | alumno_id, asignacion_id, periodo |
+| `GRADE_BULK_UPSERT`    | Bulk grade save               | asignacion_id, periodo, count     |
+| `REPORT_CARD_SIGNED`   | Report card signature         | alumno_id, periodo                |
+| `ANNOUNCEMENT_CREATED` | New announcement              | grupo_id                          |
 
 All audit writes are non-blocking — failures log a warning and do not affect the API response.
 
 ## HTTPS Local Architecture
 
 ```
-┌─────────────────────────────────────┐
-│  Bun / Express / Node.js            │
-│  ┌───────────────────────────────┐  │
-│  │  HTTPS_ENABLED=false          │  │
-│  │  → HTTP on port 3000          │  │
-│  │                               │  │
-│  │  HTTPS_ENABLED=true           │  │
-│  │  → HTTPS on port 3443         │  │
-│  │  → TLS 1.2 minimum            │  │
-│  │  → TLS 1.3 maximum            │  │
-│  └───────────────────────────────┘  │
-│         │                           │
-│         ▼                           │
-│  ┌──────────────┐                  │
-│  │  PostgreSQL  │ (localhost:5432)  │
-│  └──────────────┘                  │
-└─────────────────────────────────────┘
+┌──────────────────────────────────────┐
+│  Client                              │
+│    → HTTPS https://localhost:3443     │
+│         │                            │
+│         ▼                            │
+│  Bun / Express / Node.js             │
+│  ┌────────────────────────────────┐  │
+│  │  HTTPS (always on)             │  │
+│  │  → TLS 1.2 minimum             │  │
+│  │  → TLS 1.3 maximum             │  │
+│  └────────────────────────────────┘  │
+│         │                            │
+│         ▼                            │
+│  ┌──────────────┐                   │
+│  │  PostgreSQL  │ (localhost:5432)   │
+│  └──────────────┘                   │
+└──────────────────────────────────────┘
 ```
 
 ## Certificate Generation
@@ -99,14 +99,14 @@ Creates `.local-certs/localhost-key.pem` and `.local-certs/localhost-cert.pem` (
 ## HTTPS Startup
 
 ```bash
-# 1. Generate certs
-./scripts/generate-local-cert.sh
+# 1. Generate certs (first time only)
+bun run cert
 
-# 2. Enable HTTPS in .env
-HTTPS_ENABLED=true
-
-# 3. Start server
+# 2. Start server
 bun run dev
+
+# 3. Verify TLS
+bun run tls
 ```
 
 ## TLS Verification

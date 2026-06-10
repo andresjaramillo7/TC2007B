@@ -32,7 +32,7 @@ paths:
               $ref: "#/components/schemas/LoginRequest"
             example:
               email: teacher@example.com
-              password: password123
+              password: Demo_Teacher1!
       responses:
         "200":
           description: Successful authentication

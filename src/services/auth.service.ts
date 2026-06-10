@@ -5,6 +5,7 @@ import { AppError } from '../errors/AppError';
 import { HTTP_STATUS } from '../constants';
 import { findUserByEmail, findUserById } from '../models/user.model';
 import { sanitizeUser } from '../utils/sanitizeUser';
+import { insertAuditLog } from '../models/audit-log.model';
 
 export interface PublicUser {
   id: number;
@@ -24,12 +25,24 @@ export async function login(email: string, password: string): Promise<LoginResul
   const user = await findUserByEmail(email);
 
   if (!user) {
+    await insertAuditLog({
+      usuarioId: null,
+      accion: 'LOGIN_FAILED',
+      exitoso: false,
+      detalles: { email },
+    });
     throw new AppError('Invalid email or password', HTTP_STATUS.UNAUTHORIZED);
   }
 
   const passwordMatch = await bcrypt.compare(password, user.password_hash);
 
   if (!passwordMatch) {
+    await insertAuditLog({
+      usuarioId: user.id,
+      accion: 'LOGIN_FAILED',
+      exitoso: false,
+      detalles: { email },
+    });
     throw new AppError('Invalid email or password', HTTP_STATUS.UNAUTHORIZED);
   }
 
@@ -38,6 +51,12 @@ export async function login(email: string, password: string): Promise<LoginResul
     config.jwt.secret,
     { expiresIn: config.jwt.expiresIn } as jwt.SignOptions,
   );
+
+  await insertAuditLog({
+    usuarioId: user.id,
+    accion: 'LOGIN_SUCCESS',
+    exitoso: true,
+  });
 
   return { token, user: sanitizeUser(user) };
 }

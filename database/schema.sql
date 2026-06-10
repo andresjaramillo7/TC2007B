@@ -139,3 +139,14 @@ CREATE TABLE IF NOT EXISTS firmas_boleta (
   fecha_firma TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (tutor_id, alumno_id, periodo)
 );
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id SERIAL PRIMARY KEY,
+  usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  accion VARCHAR(80) NOT NULL,
+  entidad VARCHAR(80),
+  entidad_id INTEGER,
+  exitoso BOOLEAN NOT NULL,
+  detalles JSONB,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

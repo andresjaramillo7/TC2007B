@@ -56,6 +56,12 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
+describe('HTTPS configuration', () => {
+  it('should parse HTTPS_ENABLED=false as false', () => {
+    expect(config.https.enabled).toBe(false);
+  });
+});
+
 describe('GET /nonexistent', () => {
   it('should return 404 with fail status', async () => {
     const res = await request(app).get('/nonexistent');

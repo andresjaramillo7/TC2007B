@@ -10,6 +10,7 @@ import {
   findGroupById,
   teacherHasAccessToGroup,
 } from '../models/academic.model';
+import { insertAuditLog } from '../models/audit-log.model';
 import type {
   AnnouncementResponse,
   PublishAnnouncementInput,
@@ -70,6 +71,15 @@ export async function publishAnnouncement(
     input.titulo,
     input.contenido,
   );
+
+  await insertAuditLog({
+    usuarioId: userId,
+    accion: 'ANNOUNCEMENT_CREATED',
+    entidad: 'avisos_grupales',
+    entidadId: avisoId,
+    exitoso: true,
+    detalles: { grupo_id: input.grupo_id },
+  });
 
   return { message: 'Aviso publicado', aviso_id: avisoId };
 }

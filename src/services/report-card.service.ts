@@ -7,6 +7,7 @@ import {
   upsertReportCardSignature,
   countGradesForStudentAndPeriod,
 } from '../models/report-card.model';
+import { insertAuditLog } from '../models/audit-log.model';
 import type {
   ReportCardData,
   ReportCardAlumno,
@@ -133,6 +134,15 @@ export async function signReportCard(
     studentId,
     periodo,
   );
+
+  await insertAuditLog({
+    usuarioId: tutorId,
+    accion: 'REPORT_CARD_SIGNED',
+    entidad: 'firmas_boleta',
+    entidadId: firma.firma_id,
+    exitoso: true,
+    detalles: { alumno_id: studentId, periodo },
+  });
 
   return {
     message: 'Boleta firmada con éxito',

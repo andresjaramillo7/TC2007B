@@ -13,6 +13,7 @@ import {
   validateStudentsBelongToAssignment,
   upsertGradesBulkTransaction,
 } from '../models/grades.model';
+import { insertAuditLog } from '../models/audit-log.model';
 import type { GradeRow, GradeTableEntry, UpsertGradeInput } from '../types/grades.types';
 
 function convertGradeRow(row: Record<string, unknown>): GradeRow {
@@ -128,6 +129,15 @@ export async function upsertSingleGrade(
     data.comentario ?? null,
   );
 
+  await insertAuditLog({
+    usuarioId: userId,
+    accion: 'GRADE_UPSERT',
+    entidad: 'calificacion',
+    entidadId: calificacionId,
+    exitoso: true,
+    detalles: { alumno_id: data.alumno_id, asignacion_id: data.asignacion_id, periodo: data.periodo },
+  });
+
   return {
     message: 'Calificación registrada con éxito',
     calificacion_id: calificacionId,
@@ -178,6 +188,14 @@ export async function upsertBulkGrades(
     );
 
     await client.query('COMMIT');
+
+    await insertAuditLog({
+      usuarioId: userId,
+      accion: 'GRADE_BULK_UPSERT',
+      entidad: 'calificaciones',
+      exitoso: true,
+      detalles: { asignacion_id: data.asignacion_id, periodo: data.periodo, count },
+    });
 
     return {
       message: 'Calificaciones registradas con éxito',

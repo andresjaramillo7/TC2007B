@@ -15,6 +15,13 @@ const envSchema = z
     JWT_SECRET: z.string().default('dev-secret'),
     JWT_EXPIRES_IN: z.string().default('8h'),
     CORS_ORIGIN: z.string().default('*'),
+    HTTPS_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+    HTTPS_PORT: z.coerce.number().default(3443),
+    TLS_KEY_PATH: z.string().default('.local-certs/localhost-key.pem'),
+    TLS_CERT_PATH: z.string().default('.local-certs/localhost-cert.pem'),
   })
   .passthrough();
 
@@ -44,12 +51,20 @@ interface CorsConfig {
   origin: string;
 }
 
+interface HttpsConfig {
+  enabled: boolean;
+  port: number;
+  keyPath: string;
+  certPath: string;
+}
+
 interface Config {
   port: number;
   nodeEnv: string;
   db: DbConfig;
   jwt: JwtConfig;
   cors: CorsConfig;
+  https: HttpsConfig;
 }
 
 export const config: Config = {
@@ -68,5 +83,11 @@ export const config: Config = {
   },
   cors: {
     origin: env.CORS_ORIGIN,
+  },
+  https: {
+    enabled: env.HTTPS_ENABLED,
+    port: env.HTTPS_PORT,
+    keyPath: env.TLS_KEY_PATH,
+    certPath: env.TLS_CERT_PATH,
   },
 };
